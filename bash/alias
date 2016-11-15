@@ -1,0 +1,7 @@
+# ALIAS
+
+alias l='ls -la'
+take (){
+     mkdir $1
+     cd $1
+}
