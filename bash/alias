@@ -1,6 +1,11 @@
 # ALIAS
 
-alias l='ls -la'
+alias l='ls -la --color=auto'
+alias ls='ls --color=auto'
+alias grep='grep --colour=auto'
+alias egrep='egrep --colour=auto'
+alias fgrep='fgrep --colour=auto'
+
 take (){
      mkdir $1
      cd $1
