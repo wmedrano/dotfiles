@@ -7,10 +7,11 @@ Xft.hintstyle : hintslight
 Xft.rgba      : rgb
 Xft.lcdfilter : lcddefault
 
+*.scrollBar   : false
 
 ! URxvt
-*.borderColor:  #282b3e
-*.background:   #282b3e
+*.borderColor:  #ffffff
+*.background:   #272c35
 *.foreground:   #f3eed8
 *.cursorColor:  #cccccc
 
