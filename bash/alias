@@ -6,6 +6,10 @@ alias grep='grep --colour=auto'
 alias egrep='egrep --colour=auto'
 alias fgrep='fgrep --colour=auto'
 
+alias em='emacs -nw'
+
+
+
 take (){
      mkdir $1
      cd $1
