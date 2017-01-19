@@ -12,4 +12,5 @@ ln -s ~/dotfiles/Xresources ~/.Xresources
 rm -r ~/.config/i3
 ln -s ~/dotfiles/i3 ~/.config
 
-feh --bg-scale ~/wallpaper.png
+rm ~/.xsession
+ln -s ~/dotfiles/.xsession ~/.xsession
