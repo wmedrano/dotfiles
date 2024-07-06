@@ -4,7 +4,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -37,14 +37,14 @@
 ;; Editor completion
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'ivy)
+(setq-default ivy-height 32)
 (ivy-mode)
 
 (require 'counsel)
 (counsel-mode)
 
 (require 'ivy-posframe)
-(setq-default ivy-posframe-min-width 256
-	      ivy-posframe-min-height 32)
+(setq-default ivy-posframe-min-width 256)
 (ivy-posframe-mode)
 
 (require 'ivy-rich)
@@ -81,6 +81,7 @@
 (setq-default company-tooltip-width-grow-only t
 	      company-idle-delay 0.1)
 (global-company-mode)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Syntax & Compile Errors
@@ -151,3 +152,11 @@
 (tool-bar-mode -1)
 (global-display-line-numbers-mode)
 (global-hl-line-mode)
+(column-number-mode)
+
+(require 'diminish)
+(diminish 'company-mode)
+(diminish 'eldoc-mode)
+(diminish 'counsel-mode)
+(diminish 'ivy-posframe-mode)
+(diminish 'ivy-mode)
