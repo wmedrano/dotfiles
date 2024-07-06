@@ -1,10 +1,13 @@
+;;; package --- Emacs configuration.
+;;; Commentary:
+;;; Code:
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -29,6 +32,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Basic keybindings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'cua-base)
 (cua-mode)
 (define-key cua-global-keymap (kbd "<home>") #'beginning-of-buffer)
 (define-key cua-global-keymap (kbd "<end>")  #'end-of-buffer)
@@ -59,11 +63,11 @@
 (require 'eglot-booster)
 
 (defun eglot-format-on-save ()
-  "Run eglot-format-buffer on save."
+  "Run `eglot-format-buffer` on save."
   (add-hook 'before-save-hook #'eglot-format-buffer 0 t))
 
 (defun eglot-disable-inlay-hints-mode ()
-  "Disable inlay-hints-mode"
+  "Disable `inlay-hints-mode`."
   (eglot-inlay-hints-mode))
 (add-hook 'eglot-managed-mode-hook #'eglot-disable-inlay-hints-mode)
 
@@ -99,15 +103,15 @@
 ;;   - The specific triggering is left in the language specific sections.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun delete-trailing-whitespace-on-save ()
-  "Add delete-trailing-whitespace before save."
+  "Add `delete-trailing-whitespace` before save."
   (add-hook 'before-save-hook #'delete-trailing-whitespace 0 t))
 
 (defun set-fill-column-80 ()
-  "Run set-fill-column with 80"
+  "Run `set-fill-column` with 80."
   (set-fill-column 80))
 
 (defun set-fill-column-100 ()
-  "Run set-fill-column with 100."
+  "Run `set-fill-column` with 100."
   (set-fill-column 100))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -121,11 +125,15 @@
 (require 'elisp-mode)
 
 (defun elisp-eval-on-save ()
-  "Run eval-buffer on save."
+  "Run `eval-buffer` on save."
   (interactive)
   (add-hook 'after-save-hook #'eval-buffer 0 t))
 
 (add-hook 'emacs-lisp-mode-hook #'delete-trailing-whitespace-on-save)
+(add-hook 'emacs-lisp-mode-hook #'flyspell-prog-mode)
+(add-hook 'emacs-lisp-mode-hook #'flymake-mode)
+(seq-doseq (p load-path)
+  (add-to-list 'elisp-flymake-byte-compile-load-path p))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Rust
@@ -133,13 +141,21 @@
 (require 'rust-mode)
 (add-to-list 'exec-path "~/.cargo/bin")
 
-(defun rust-fmt-on-save ()
+(defun rustfmt-on-save ()
   "Run rustfmt on save."
   (add-hook 'before-save-hook #'rust-format-buffer 0 t))
 
 (add-hook 'rust-mode-hook #'rustfmt-on-save)
 (add-hook 'rust-mode-hook #'eglot-ensure)
 (add-hook 'rust-mode-hook #'set-fill-column-100)
+(add-hook 'rust-mode-hook #'flyspell-prog-mode)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Markdown
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'markdown-mode)
+(add-hook 'markdown-mode #'flyspell-mode)
+(add-hook 'markdown-mode #'delete-trailing-whitespace-on-save)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Look & Feel
@@ -160,3 +176,6 @@
 (diminish 'counsel-mode)
 (diminish 'ivy-posframe-mode)
 (diminish 'ivy-mode)
+
+(provide 'init)
+;;; init.el ends here
