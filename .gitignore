@@ -1,4 +1,5 @@
-./dot-emacs.d/auto-save-list/
-./dot-emacs.d/eln-cache/
-./dot-emacs.d/elpa
-./dot-emacs.d/projects
+/dot-emacs.d/auto-save-list/
+/dot-emacs.d/eln-cache/
+/dot-emacs.d/elpa/
+/dot-emacs.d/projects
+/dot-emacs.d/transient/
