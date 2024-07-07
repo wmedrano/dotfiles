@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -170,13 +170,18 @@
 (global-display-line-numbers-mode)
 (global-hl-line-mode)
 (column-number-mode)
+(set-frame-font "JetBrains Mono 11")
+
+(load-theme 'modus-vivendi t)
 
 (require 'diminish)
 (diminish 'company-mode)
-(diminish 'eldoc-mode)
 (diminish 'counsel-mode)
+(diminish 'eldoc-mode)
 (diminish 'ivy-posframe-mode)
 (diminish 'ivy-mode)
+(diminish 'which-key-mode)
+(diminish 'auto-revert-mode)
 
 (require 'transient-posframe)
 (transient-posframe-mode)
