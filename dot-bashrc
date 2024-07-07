@@ -4,33 +4,9 @@ if [ -z "$BASHRCSOURCED" ]; then
 
   # Are we an interactive shell?
   if [ "$PS1" ]; then
-    if [ -z "$PROMPT_COMMAND" ]; then
-      declare -a PROMPT_COMMAND
-      case $TERM in
-      xterm*)
-        PROMPT_COMMAND='printf "\033]0;%s@%s:%s\007" "${USER}" "${HOSTNAME%%.*}" "${PWD/#$HOME/\~}"'
-        ;;
-      screen*)
-        PROMPT_COMMAND='printf "\033k%s@%s:%s\033\\" "${USER}" "${HOSTNAME%%.*}" "${PWD/#$HOME/\~}"'
-        ;;
-      *)
-        [ -e /etc/sysconfig/bash-prompt-default ] && PROMPT_COMMAND=/etc/sysconfig/bash-prompt-default
-        ;;
-      esac
-    fi
-    # Turn on parallel history.
+    PROMPT_COMMAND='PS1_CMD1=$(git branch --show-current 2>/dev/null)'; PS1='\[\e[32m\]\w\[\e[0m\] \[\e[32m\]${PS1_CMD1}\[\e[0m\]\\$ '
     shopt -s histappend
-    # Turn on checkwinsize.
     shopt -s checkwinsize
-    # Change the default prompt string
-    [ "$PS1" = "\\s-\\v\\\$ " ] && PS1="[\u@\h \W]\\$ "
-    # You might want to have e.g. tty in prompt (e.g. more virtual machines)
-    # and console windows
-    # If you want to do so, just add e.g.
-    # if [ "$PS1" ]; then
-    #   PS1="[\u@\h:\l \W]\\$ "
-    # fi
-    # to your custom modification shell script in /etc/profile.d/ directory
   fi
 
   if ! shopt -q login_shell ; then # We're not a login shell
