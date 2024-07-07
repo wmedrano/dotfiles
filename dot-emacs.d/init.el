@@ -201,7 +201,7 @@
   [:description "Commands"
 		("a" "Buffers" wm-transient-buffers)
 		("r" "Find" wm-transient-find)
-		("s" "Magit" magit-dispatch)])
+		("s" "Magit" magit)])
 
 (global-set-key (kbd "C-t") #'wm-transient-command)
 
@@ -212,6 +212,7 @@
 	      ring-bell-function #'ignore
 	      scroll-conservatively 101
 	      display-line-numbers-grow-only t
+	      display-line-numbers-width 3
 	      initial-frame-alist '((fullscreen . maximized)))
 (blink-cursor-mode -1)
 (scroll-bar-mode -1)
