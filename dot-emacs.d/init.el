@@ -174,6 +174,38 @@
 (add-hook 'dired-posframe-mode-hook #'dired-posframe-show)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Navigation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'avy)
+(require 'ivy-avy)
+(setq-default avy-keys '(?a ?r ?s ?t ?n ?e ?i ?o))
+(global-set-key (kbd "C-'") #'avy-goto-char-2)
+
+(require 'project)
+
+(transient-define-prefix wm-transient-buffers ()
+  "Project commands."
+  [:description "Buffers"
+		("a" "Project Find File" project-find-file)
+		("r" "Switch To Buffer" counsel-switch-buffer)])
+
+(transient-define-prefix wm-transient-find ()
+  "Find commands."
+  [:description "Find"
+		("a" "Interactive Search All Buffers" swiper-all)
+		("r" "Search Project" project-find-regexp)
+		])
+
+(transient-define-prefix wm-transient-command ()
+  "Custom commands."
+  [:description "Commands"
+		("a" "Buffers" wm-transient-buffers)
+		("r" "Find" wm-transient-find)
+		("s" "Magit" magit-dispatch)])
+
+(global-set-key (kbd "C-t") #'wm-transient-command)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Look & Feel
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq-default inhibit-startup-screen t
