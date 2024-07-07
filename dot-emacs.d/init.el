@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(catppuccin-theme ivy-avy avy modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -30,12 +30,16 @@
 	      gc-cons-threshold (* 512 1024 1024))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Basic keybindings
+;; Keybindings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(require 'cua-base)
-(cua-mode)
-(define-key cua-global-keymap (kbd "<home>") #'beginning-of-buffer)
-(define-key cua-global-keymap (kbd "<end>")  #'end-of-buffer)
+(require 'evil)
+(evil-mode)
+(define-key evil-motion-state-map (kbd "n") #'evil-next-line)
+(define-key evil-motion-state-map (kbd "e") #'evil-previous-line)
+(define-key evil-motion-state-map (kbd "j") #'evil-search-next)
+(define-key evil-motion-state-map (kbd "J") #'evil-search-backward)
+(global-set-key (kbd "<home>") #'beginning-of-buffer)
+(global-set-key (kbd "<end>")  #'end-of-buffer)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Editor completion
@@ -174,38 +178,6 @@
 (add-hook 'dired-posframe-mode-hook #'dired-posframe-show)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Navigation
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(require 'avy)
-(require 'ivy-avy)
-(setq-default avy-keys '(?a ?r ?s ?t ?n ?e ?i ?o))
-(global-set-key (kbd "C-'") #'avy-goto-char-2)
-
-(require 'project)
-
-(transient-define-prefix wm-transient-buffers ()
-  "Project commands."
-  [:description "Buffers"
-		("a" "Project Find File" project-find-file)
-		("r" "Switch To Buffer" counsel-switch-buffer)])
-
-(transient-define-prefix wm-transient-find ()
-  "Find commands."
-  [:description "Find"
-		("a" "Interactive Search All Buffers" swiper-all)
-		("r" "Search Project" project-find-regexp)
-		])
-
-(transient-define-prefix wm-transient-command ()
-  "Custom commands."
-  [:description "Commands"
-		("a" "Buffers" wm-transient-buffers)
-		("r" "Find" wm-transient-find)
-		("s" "Magit" magit)])
-
-(global-set-key (kbd "C-t") #'wm-transient-command)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Look & Feel
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq-default inhibit-startup-screen t
@@ -220,7 +192,9 @@
 (global-display-line-numbers-mode)
 (global-hl-line-mode)
 (column-number-mode)
-(set-frame-font "JetBrains Mono 11")
+(if (string-equal (system-name) "quest")
+    (set-frame-font "JetBrains Mono 11")
+  (set-frame-font "JetBrains Mono 14"))
 
 (require 'catppuccin-theme)
 (mapc #'disable-theme custom-enabled-themes)
