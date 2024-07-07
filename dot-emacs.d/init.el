@@ -42,13 +42,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'ivy)
 (setq-default ivy-height 32)
+(define-key ivy-minibuffer-map (kbd "S-<return>") #'ivy-immediate-done)
 (ivy-mode)
 
 (require 'counsel)
+(define-key counsel-mode-map (kbd "C-x b") #'counsel-switch-buffer)
+(define-key counsel-mode-map (kbd "C-x C-b") #'counsel-switch-buffer-other-window)
 (counsel-mode)
 
 (require 'ivy-posframe)
-(setq-default ivy-posframe-min-width 256)
+(setq-default ivy-posframe-min-width 220)
 (ivy-posframe-mode)
 
 (require 'ivy-rich)
