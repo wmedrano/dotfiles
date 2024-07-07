@@ -1,3 +1,3 @@
 #!/bin/sh
 
-stow --dotfiles --target=$HOME --ignore=./install.sh ./
+stow --dotfiles --target=$HOME --ignore=install.sh ./
