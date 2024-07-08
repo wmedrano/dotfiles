@@ -166,8 +166,10 @@
 ;; Markdown
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'markdown-mode)
-(add-hook 'markdown-mode #'flyspell-mode)
-(add-hook 'markdown-mode #'delete-trailing-whitespace-on-save)
+(add-hook 'markdown-mode-hook #'flyspell-mode)
+(add-hook 'markdown-mode-hook #'delete-trailing-whitespace-on-save)
+(add-hook 'markdown-mode-hook #'set-fill-column-80)
+(add-hook 'markdown-mode-hook #'auto-fill-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File Browsing
