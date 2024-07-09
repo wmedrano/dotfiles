@@ -210,6 +210,8 @@
 (diminish 'ivy-mode)
 (diminish 'which-key-mode)
 (diminish 'auto-revert-mode)
+(diminish 'auto-fill-function)
+(diminish 'which-key-mode)
 
 (require 'transient-posframe)
 (transient-posframe-mode)
