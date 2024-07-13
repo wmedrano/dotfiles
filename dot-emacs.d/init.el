@@ -202,6 +202,14 @@
 (mapc #'disable-theme custom-enabled-themes)
 (load-theme 'catppuccin t)
 
+(require 'transient-posframe)
+(transient-posframe-mode)
+
+(require 'which-key)
+(require 'which-key-posframe)
+(which-key-mode)
+(which-key-posframe-mode)
+
 (require 'diminish)
 (diminish 'company-mode)
 (diminish 'counsel-mode)
@@ -212,14 +220,6 @@
 (diminish 'auto-revert-mode)
 (diminish 'auto-fill-function)
 (diminish 'which-key-mode)
-
-(require 'transient-posframe)
-(transient-posframe-mode)
-
-(require 'which-key)
-(require 'which-key-posframe)
-(which-key-mode)
-(which-key-posframe-mode)
 
 (provide 'init)
 ;;; init.el ends here
