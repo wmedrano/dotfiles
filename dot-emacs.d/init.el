@@ -128,6 +128,9 @@
 (setq-default magit-auto-revert-immediately t)
 (global-auto-revert-mode)
 
+(require 'git-commit)
+(add-hook 'git-commit-mode-hook #'evil-insert-state)
+
 (require 'diff-hl)
 (require 'diff-hl-flydiff)
 (global-diff-hl-mode)
