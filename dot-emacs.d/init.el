@@ -125,6 +125,8 @@
 ;; Version Control
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'magit)
+(setq-default magit-auto-revert-immediately t)
+(global-auto-revert-mode)
 
 (require 'diff-hl)
 (require 'diff-hl-flydiff)
