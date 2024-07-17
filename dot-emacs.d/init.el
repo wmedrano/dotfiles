@@ -73,10 +73,10 @@
   "Run `eglot-format-buffer` on save."
   (add-hook 'before-save-hook #'eglot-format-buffer 0 t))
 
-(defun eglot-disable-inlay-hints-mode ()
+(defun eglot-disable-inlay-hints ()
   "Disable `inlay-hints-mode`."
-  (eglot-inlay-hints-mode))
-(add-hook 'eglot-managed-mode-hook #'eglot-disable-inlay-hints-mode)
+  (eglot-inlay-hints-mode -1))
+(add-hook 'eglot-managed-mode-hook #'eglot-disable-inlay-hints)
 
 ;; Requires https://github.com/jdtsmith/eglot-booster to be installed
 ;; somewhere in $PATH.
