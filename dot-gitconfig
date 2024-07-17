@@ -1,2 +1,4 @@
 [user]
 	email = will.s.medrano@gmail.com
+[init]
+	defaultBranch = main
