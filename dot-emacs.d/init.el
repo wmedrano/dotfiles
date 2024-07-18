@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(zig-mode doom-modeline evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(ace-window zig-mode doom-modeline evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -40,6 +40,12 @@
 (define-key evil-motion-state-map (kbd "J") #'evil-search-backward)
 (global-set-key (kbd "<home>") #'beginning-of-buffer)
 (global-set-key (kbd "<end>")  #'end-of-buffer)
+
+(require 'ace-window)
+(setq-default aw-dispatch-always t)
+(global-set-key (kbd "C-w") #'ace-window)
+(define-key evil-motion-state-map (kbd "C-w") nil t)
+(define-key evil-insert-state-map (kbd "C-w") nil t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Editor completion
@@ -127,6 +133,7 @@
 (require 'magit)
 (setq-default magit-auto-revert-immediately t)
 (global-auto-revert-mode)
+(define-key magit-status-mode-map (kbd "C-w") #'ace-window)
 
 (require 'git-commit)
 (add-hook 'git-commit-mode-hook #'evil-insert-state)
