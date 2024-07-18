@@ -153,9 +153,15 @@
   (interactive)
   (add-hook 'after-save-hook #'eval-buffer 0 t))
 
+(defun elisp-init-eval-on-save ()
+  "Run `eval-buffer` on save only if the buffer is the user config."
+  (when (string-equal (buffer-file-name) user-init-file)
+    (elisp-eval-on-save)))
+
 (add-hook 'emacs-lisp-mode-hook #'delete-trailing-whitespace-on-save)
 (add-hook 'emacs-lisp-mode-hook #'flyspell-prog-mode)
 (add-hook 'emacs-lisp-mode-hook #'flymake-mode)
+(add-hook 'emacs-lisp-mode-hook #'elisp-init-eval-on-save)
 (seq-doseq (p load-path)
   (add-to-list 'elisp-flymake-byte-compile-load-path p))
 
