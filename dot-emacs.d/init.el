@@ -134,6 +134,7 @@
 (setq-default magit-auto-revert-immediately t)
 (global-auto-revert-mode)
 (define-key magit-status-mode-map (kbd "C-w") #'ace-window)
+(define-key magit-status-mode-map (kbd "e")   #'magit-section-backward)
 
 (require 'git-commit)
 (add-hook 'git-commit-mode-hook #'evil-insert-state)
