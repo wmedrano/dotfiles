@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window zig-mode doom-modeline evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(evil-commentary ace-window zig-mode doom-modeline evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -40,6 +40,9 @@
 (define-key evil-motion-state-map (kbd "J") #'evil-search-backward)
 (global-set-key (kbd "<home>") #'beginning-of-buffer)
 (global-set-key (kbd "<end>")  #'end-of-buffer)
+
+(require 'evil-commentary)
+(evil-commentary-mode)
 
 (require 'ace-window)
 (setq-default aw-dispatch-always t)
@@ -92,6 +95,13 @@
 (define-key eglot-mode-map (kbd "<f3>") #'eglot-code-actions)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; References
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'xref)
+(define-key xref--xref-buffer-mode-map (kbd "e") #'xref-prev-line)
+(add-to-list 'evil-emacs-state-modes 'xref-mode)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Autocomplete
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'company)
@@ -109,6 +119,8 @@
 
 (setq-default compile-command "")
 (global-set-key (kbd "<f5>") #'recompile)
+(delete 'compilation-mode evil-motion-state-modes)
+(add-to-list 'evil-emacs-state-modes 'compilation-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Code Formatting
