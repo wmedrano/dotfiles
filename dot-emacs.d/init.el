@@ -99,7 +99,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'xref)
 (define-key xref--xref-buffer-mode-map (kbd "e") #'xref-prev-line)
-(add-to-list 'evil-emacs-state-modes 'xref-mode)
+(add-to-list 'evil-emacs-state-modes 'xref--xref-buffer-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Autocomplete
