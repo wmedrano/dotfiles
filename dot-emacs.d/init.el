@@ -77,6 +77,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'eglot)
 (require 'eglot-booster)
+(setq-default eglot-events-buffer-size 0)
 
 (defun eglot-format-on-save ()
   "Run `eglot-format-buffer` on save."
