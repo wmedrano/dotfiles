@@ -127,6 +127,9 @@
 (delete 'compilation-mode evil-motion-state-modes)
 (add-to-list 'evil-emacs-state-modes 'compilation-mode)
 
+;; Colorize compilation buffer.
+(add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Code Formatting
 ;;   - Code formatting functions are defined here.
