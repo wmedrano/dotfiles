@@ -77,7 +77,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'eglot)
 (require 'eglot-booster)
-(setq-default eglot-events-buffer-size 0)
+(setq-default eglot-events-buffer-size 0
+	      eglot-extend-to-xref t)
 
 (defun eglot-format-on-save ()
   "Run `eglot-format-buffer` on save."
@@ -96,8 +97,11 @@
 (define-key eglot-mode-map (kbd "<f3>") #'eglot-code-actions)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; References
+;; Hover & References
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'eldoc)
+(setq-default eldoc-idle-delay 0.6)
+
 (require 'xref)
 (define-key xref--xref-buffer-mode-map (kbd "e") #'xref-prev-line)
 (add-to-list 'evil-emacs-state-modes 'xref--xref-buffer-mode)
