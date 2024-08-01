@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(evil-commentary ace-window zig-mode doom-modeline evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(go-mode evil-commentary ace-window zig-mode doom-modeline evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -180,7 +180,6 @@
     (elisp-eval-on-save)))
 
 (add-hook 'emacs-lisp-mode-hook #'delete-trailing-whitespace-on-save)
-(add-hook 'emacs-lisp-mode-hook #'flyspell-prog-mode)
 (add-hook 'emacs-lisp-mode-hook #'flymake-mode)
 (add-hook 'emacs-lisp-mode-hook #'elisp-init-eval-on-save)
 (seq-doseq (p load-path)
@@ -198,7 +197,6 @@
 (add-hook 'rust-mode-hook #'rustfmt-on-save)
 (add-hook 'rust-mode-hook #'eglot-ensure)
 (add-hook 'rust-mode-hook #'set-fill-column-100)
-(add-hook 'rust-mode-hook #'flyspell-prog-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Zig
@@ -208,13 +206,11 @@
 
 (add-hook 'zig-mode-hook #'eglot-ensure)
 (add-hook 'zig-mode-hook #'set-fill-column-100)
-(add-hook 'zig-mode-hook #'flyspell-prog-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Markdown
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'markdown-mode)
-(add-hook 'markdown-mode-hook #'flyspell-mode)
 (add-hook 'markdown-mode-hook #'delete-trailing-whitespace-on-save)
 (add-hook 'markdown-mode-hook #'set-fill-column-80)
 (add-hook 'markdown-mode-hook #'auto-fill-mode)
