@@ -24,10 +24,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Performance Tweaks
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(setq-default make-backup-files nil
-	      auto-save-default nil
-	      gc-cons-percentage 1.0
-	      gc-cons-threshold (* 512 1024 1024))
+(setq-default make-backup-files  nil
+	      auto-save-default  nil
+	      gc-cons-percentage 2.0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Keybindings
@@ -243,7 +242,7 @@
 (column-number-mode)
 (if (string-equal (system-name) "quest")
     (set-frame-font "JetBrains Mono 11")
-  (set-frame-font "JetBrains Mono 14"))
+  (set-frame-font "JetBrains Mono 15"))
 
 (require 'catppuccin-theme)
 (mapc #'disable-theme custom-enabled-themes)
