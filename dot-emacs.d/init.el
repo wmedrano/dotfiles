@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(go-mode evil-commentary ace-window zig-mode doom-modeline evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(doom-modeline go-mode evil-commentary ace-window zig-mode evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -83,10 +83,16 @@
   "Run `eglot-format-buffer` on save."
   (add-hook 'before-save-hook #'eglot-format-buffer 0 t))
 
+(defun eglot-enable-inlay-hints ()
+  "Enable `inlay-hints-mode`."
+  (eglot-inlay-hints-mode 1))
 (defun eglot-disable-inlay-hints ()
   "Disable `inlay-hints-mode`."
   (eglot-inlay-hints-mode -1))
-(add-hook 'eglot-managed-mode-hook #'eglot-disable-inlay-hints)
+(defun auto-toggle-eglot-inlay-hints ()
+  (add-hook 'evil-insert-state-entry-hook #'eglot-disable-inlay-hints 0 t)
+  (add-hook 'evil-insert-state-exit-hook #'eglot-enable-inlay-hints 0 t))
+(add-hook 'eglot-managed-mode-hook #'auto-toggle-eglot-inlay-hints)
 
 ;; Requires https://github.com/jdtsmith/eglot-booster to be installed
 ;; somewhere in $PATH.
