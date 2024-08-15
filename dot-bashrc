@@ -58,4 +58,4 @@ if ! [[ "$PATH" =~ "$HOME/.cargo/bin" ]]; then
 fi
 export PATH
 
-alias callgrind="valgrind --tool=callgrind --simulate-cache=yes"
+alias callgrind="valgrind --tool=callgrind --simulate-cache=yes --dump-instr=yes --collect-jumps=yes"

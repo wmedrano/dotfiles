@@ -25,8 +25,8 @@
 ;; Performance Tweaks
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq-default make-backup-files  nil
-	      auto-save-default  nil
-	      gc-cons-percentage 2.0)
+              auto-save-default  nil
+              gc-cons-percentage 2.0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Keybindings
@@ -77,7 +77,7 @@
 (require 'eglot)
 (require 'eglot-booster)
 (setq-default eglot-events-buffer-size 0
-	      eglot-extend-to-xref t)
+              eglot-extend-to-xref t)
 
 (defun eglot-format-on-save ()
   "Run `eglot-format-buffer` on save."
@@ -89,10 +89,7 @@
 (defun eglot-disable-inlay-hints ()
   "Disable `inlay-hints-mode`."
   (eglot-inlay-hints-mode -1))
-(defun auto-toggle-eglot-inlay-hints ()
-  (add-hook 'evil-insert-state-entry-hook #'eglot-disable-inlay-hints 0 t)
-  (add-hook 'evil-insert-state-exit-hook #'eglot-enable-inlay-hints 0 t))
-(add-hook 'eglot-managed-mode-hook #'auto-toggle-eglot-inlay-hints)
+(add-hook 'eglot-managed-mode-hook #'eglot-disable-inlay-hints)
 
 ;; Requires https://github.com/jdtsmith/eglot-booster to be installed
 ;; somewhere in $PATH.
@@ -116,7 +113,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'company)
 (setq-default company-tooltip-width-grow-only t
-	      company-idle-delay 0.1)
+              company-idle-delay 0.1)
 (global-company-mode)
 
 
@@ -134,6 +131,33 @@
 
 ;; Colorize compilation buffer.
 (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
+
+(defun wm-gen-compile-cmds ()
+  "Get the valid compile commands for the current buffer."
+  (let ((cmds '((zig-mode . ("zig build test --summary all"
+			     "zig build run --summary all"
+                             "zig build --summary all"))
+                (conf-toml-mode . ("cargo test"
+                                   "cargo build"))
+                (rust-mode . ("cargo test"
+                              "cargo build")))))
+    (alist-get major-mode cmds)))
+
+(defvar wm-compile--hist '())
+
+(defun wm-compile ()
+  "Run a common compile command."
+  (interactive)
+  (let* ((name->cmd (wm-gen-compile-cmds))
+         (cmd       (ivy-completing-read "Command: "
+                                         name->cmd
+                                         nil
+                                         t
+                                         nil
+                                         'wm-compile--hist)))
+    (compile (format "time %s" cmd))))
+
+(global-set-key (kbd "C-c C-t") #'wm-compile)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Code Formatting
@@ -211,6 +235,7 @@
 
 (add-hook 'zig-mode-hook #'eglot-ensure)
 (add-hook 'zig-mode-hook #'set-fill-column-100)
+(define-key zig-mode-map (kbd "C-c C-t") #'wm-compile)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Markdown
@@ -235,11 +260,11 @@
 ;; Look & Feel
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq-default inhibit-startup-screen t
-	      ring-bell-function #'ignore
-	      scroll-conservatively 101
-	      display-line-numbers-grow-only t
-	      display-line-numbers-width 3
-	      initial-frame-alist '((fullscreen . maximized)))
+              ring-bell-function #'ignore
+              scroll-conservatively 101
+              display-line-numbers-grow-only t
+              display-line-numbers-width 3
+              initial-frame-alist '((fullscreen . maximized)))
 (blink-cursor-mode -1)
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
@@ -250,9 +275,9 @@
     (set-frame-font "JetBrains Mono 11")
   (set-frame-font "JetBrains Mono 15"))
 
-(require 'catppuccin-theme)
-(mapc #'disable-theme custom-enabled-themes)
-(load-theme 'catppuccin t)
+;; (require 'catppuccin-theme)
+;; (mapc #'disable-theme custom-enabled-themes)
+;; (load-theme 'catppuccin t)
 
 (require 'transient-posframe)
 (transient-posframe-mode)
