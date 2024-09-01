@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(doom-modeline go-mode evil-commentary ace-window zig-mode evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(eat dracula-theme filladapt doom-modeline go-mode evil-commentary ace-window zig-mode evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -26,7 +26,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq-default make-backup-files  nil
               auto-save-default  nil
-              gc-cons-percentage 2.0)
+              gc-cons-percentage 2.0
+	      redisplay-dont-pause t)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Keybindings
@@ -125,6 +126,10 @@
 (define-key flymake-mode-map (kbd "S-<f8>") #'flymake-show-buffer-diagnostics)
 
 (setq-default compile-command "")
+(setq-default
+ next-error-highlight-no-select t
+ next-error-highlight           t
+ next-error-message-highlight   'keep)
 (global-set-key (kbd "<f5>") #'recompile)
 (delete 'compilation-mode evil-motion-state-modes)
 (add-to-list 'evil-emacs-state-modes 'compilation-mode)
@@ -132,15 +137,23 @@
 ;; Colorize compilation buffer.
 (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
 
-(defun wm-gen-compile-cmds ()
+;; Use eat for terminal. It adds color.
+(require 'eat)
+(add-hook 'eshell-load-hook #'eat-eshell-mode)
+
+(defun wm-compile-cmds ()
   "Get the valid compile commands for the current buffer."
-  (let ((cmds '((zig-mode . ("zig build test --summary all"
-			     "zig build run --summary all"
-                             "zig build --summary all"))
-                (conf-toml-mode . ("cargo test"
+  (let ((cmds '((conf-toml-mode . ("cargo test"
                                    "cargo build"))
+		(markdown-mode . ("bundle exec jekyll serve --livereload"))
+		(ruby-mode . ("bundle exec jekyll serve --livereload"
+			      "bundle update"))
                 (rust-mode . ("cargo test"
-                              "cargo build")))))
+                              "cargo build"))
+		(zig-mode . ("zig build test --summary all"
+			     "zig build run --summary all"
+			     "zig build check --summary all" "zig build install --summary all"))
+		)))
     (alist-get major-mode cmds)))
 
 (defvar wm-compile--hist '())
@@ -148,7 +161,7 @@
 (defun wm-compile ()
   "Run a common compile command."
   (interactive)
-  (let* ((name->cmd (wm-gen-compile-cmds))
+  (let* ((name->cmd (wm-compile-cmds))
          (cmd       (ivy-completing-read "Command: "
                                          name->cmd
                                          nil
@@ -164,6 +177,7 @@
 ;;   - Code formatting functions are defined here.
 ;;   - The specific triggering is left in the language specific sections.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(indent-tabs-mode -1)
 (defun delete-trailing-whitespace-on-save ()
   "Add `delete-trailing-whitespace` before save."
   (add-hook 'before-save-hook #'delete-trailing-whitespace 0 t))
@@ -231,10 +245,12 @@
 ;; Zig
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'zig-mode)
+(require 'filladapt)
 (setq-default zig-format-on-save t)
 
 (add-hook 'zig-mode-hook #'eglot-ensure)
 (add-hook 'zig-mode-hook #'set-fill-column-100)
+(add-hook 'zig-mode-hook #'filladapt-mode)
 (define-key zig-mode-map (kbd "C-c C-t") #'wm-compile)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -244,6 +260,7 @@
 (add-hook 'markdown-mode-hook #'delete-trailing-whitespace-on-save)
 (add-hook 'markdown-mode-hook #'set-fill-column-80)
 (add-hook 'markdown-mode-hook #'auto-fill-mode)
+(define-key markdown-mode-map (kbd "C-c C-t") #'wm-compile)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File Browsing
@@ -275,9 +292,9 @@
     (set-frame-font "JetBrains Mono 11")
   (set-frame-font "JetBrains Mono 15"))
 
-;; (require 'catppuccin-theme)
+;; (require 'dracula-theme)
 ;; (mapc #'disable-theme custom-enabled-themes)
-;; (load-theme 'catppuccin t)
+;; (load-theme 'dracula t)
 
 (require 'transient-posframe)
 (transient-posframe-mode)

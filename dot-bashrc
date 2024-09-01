@@ -1,3 +1,5 @@
+# /bin/sh
+
 # Prevent double sourcing.
 if [ -z "$BASHRCSOURCED" ]; then
   BASHRCSOURCED="Y"
