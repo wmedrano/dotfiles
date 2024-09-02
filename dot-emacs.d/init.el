@@ -103,7 +103,8 @@
 ;; Hover & References
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'eldoc)
-(setq-default eldoc-idle-delay 0.6)
+(setq-default eldoc-idle-delay 0.6
+	      eldoc-echo-area-use-multiline-p nil)
 
 (require 'xref)
 (define-key xref--xref-buffer-mode-map (kbd "e") #'xref-prev-line)
@@ -318,6 +319,7 @@
 (diminish 'auto-revert-mode)
 (diminish 'auto-fill-function)
 (diminish 'which-key-mode)
+(diminish 'evil-commentary-mode)
 
 (provide 'init)
 ;;; init.el ends here
