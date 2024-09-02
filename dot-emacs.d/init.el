@@ -134,6 +134,7 @@
 (global-set-key (kbd "<f5>") #'recompile)
 (delete 'compilation-mode evil-motion-state-modes)
 (add-to-list 'evil-emacs-state-modes 'compilation-mode)
+(add-to-list 'evil-emacs-state-modes 'special-mode)
 
 ;; Colorize compilation buffer.
 (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
@@ -178,7 +179,7 @@
 ;;   - Code formatting functions are defined here.
 ;;   - The specific triggering is left in the language specific sections.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(indent-tabs-mode -1)
+(setq-default indent-tabs-mode nil)
 (defun delete-trailing-whitespace-on-save ()
   "Add `delete-trailing-whitespace` before save."
   (add-hook 'before-save-hook #'delete-trailing-whitespace 0 t))
