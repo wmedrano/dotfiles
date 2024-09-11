@@ -235,6 +235,9 @@
 ;; Rust
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'rust-mode)
+(setenv "RUST_BACKTRACE" "1")
+(setenv "CARGO_TERM_COLOR" "always")
+(setenv "NEXTEST_HIDE_PROGRESS_BAR" "1")
 
 (defun rustfmt-on-save ()
   "Run rustfmt on save."
