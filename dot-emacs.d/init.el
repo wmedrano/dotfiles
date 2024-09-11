@@ -45,7 +45,8 @@
 (evil-commentary-mode)
 
 (require 'ace-window)
-(setq-default aw-dispatch-always t)
+(setq-default aw-dispatch-always t
+              mouse-autoselect-window t)
 (global-set-key (kbd "C-w") #'ace-window)
 (define-key evil-motion-state-map (kbd "C-w") nil t)
 (define-key evil-insert-state-map (kbd "C-w") nil t)
