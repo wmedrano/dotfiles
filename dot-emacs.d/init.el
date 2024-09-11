@@ -295,8 +295,8 @@
 (global-hl-line-mode)
 (column-number-mode)
 (if (string-equal (system-name) "quest")
-    (set-frame-font "JetBrains Mono 11")
-  (set-frame-font "JetBrains Mono 15"))
+    (set-frame-font "JetBrains Mono 10")
+  (set-frame-font "JetBrains Mono 14"))
 
 ;; (require 'dracula-theme)
 ;; (mapc #'disable-theme custom-enabled-themes)
