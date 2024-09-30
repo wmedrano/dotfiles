@@ -126,6 +126,7 @@
 (require 'flymake)
 (define-key flymake-mode-map (kbd "<f8>") #'flymake-goto-next-error)
 (define-key flymake-mode-map (kbd "S-<f8>") #'flymake-show-buffer-diagnostics)
+(evil-declare-not-repeat #'flymake-goto-next-error)
 
 (setq-default compile-command "")
 (setq-default
@@ -133,6 +134,7 @@
  next-error-highlight           t
  next-error-message-highlight   'keep)
 (global-set-key (kbd "<f5>") #'recompile)
+(define-key compilation-mode-map (kbd "<f8>") #'compilation-next-error)
 (delete 'compilation-mode evil-motion-state-modes)
 (add-to-list 'evil-emacs-state-modes 'compilation-mode)
 (add-to-list 'evil-emacs-state-modes 'special-mode)
@@ -289,6 +291,7 @@
 (blink-cursor-mode -1)
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
+(menu-bar-mode -1)
 (global-display-line-numbers-mode)
 (global-hl-line-mode)
 (column-number-mode)
