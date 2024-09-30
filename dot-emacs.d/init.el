@@ -299,9 +299,9 @@
     (set-frame-font "JetBrains Mono 10")
   (set-frame-font "JetBrains Mono 14"))
 
-;; (require 'dracula-theme)
-;; (mapc #'disable-theme custom-enabled-themes)
-;; (load-theme 'dracula t)
+(require 'monokai-pro-theme)
+(mapc #'disable-theme custom-enabled-themes)
+(load-theme 'monokai-pro t)
 
 (require 'transient-posframe)
 (transient-posframe-mode)
