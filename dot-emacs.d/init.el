@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(smartparens undo-tree evil-anzu anzu nord-theme counsel-edit-mode monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode evil-commentary ace-window zig-mode evil catppuccin-theme modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode nerd-icons-ivy-rich magit counsel swiper ivy-rich ivy-posframe ivy company))
+   '(consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree evil-anzu anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode evil-commentary ace-window zig-mode evil modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -54,24 +54,34 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Editor completion
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(require 'ivy)
-(setq-default ivy-height (if (display-graphic-p) 32 10))
-(define-key ivy-minibuffer-map (kbd "S-<return>") #'ivy-immediate-done)
-(ivy-mode)
+(require 'vertico)
+(setq-default enable-recursive-minibuffers t)
+(vertico-mode t)
 
-(require 'counsel)
-(define-key counsel-mode-map (kbd "C-x b") #'counsel-switch-buffer)
-(define-key counsel-mode-map (kbd "C-x C-b") #'counsel-switch-buffer-other-window)
-(counsel-mode)
+(require 'orderless)
+(setq-default completion-styles '(basic orderless)
+              completion-category-overrides '((file (styles basic partial-completion))))
 
-(require 'ivy-posframe)
-(setq-default ivy-posframe-min-width 220)
-(ivy-posframe-mode)
+(require 'vertico-posframe)
+(setq-default vertico-posframe-border-width 2)
+(vertico-posframe-mode t)
 
-(require 'ivy-rich)
-(require 'nerd-icons-ivy-rich)
-(ivy-rich-mode)
-(nerd-icons-ivy-rich-mode)
+(require 'nerd-icons-completion)
+(nerd-icons-completion-mode)
+(add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
+
+(require 'marginalia)
+(marginalia-mode t)
+
+(require 'consult)
+(global-set-key (kbd "C-x b") #'consult-buffer)
+(global-set-key (kbd "C-x p b") #'consult-project-buffer)
+(require 'consult-register)
+(define-key evil-motion-state-map (kbd "g b") #'consult-register)
+(define-key evil-motion-state-map (kbd "g m") #'consult-register-store)
+
+(require 'consult-project-extra)
+(global-set-key (kbd "C-x p p") #'consult-project-extra-find)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LSP - Eglot
@@ -139,43 +149,66 @@
 (add-to-list 'evil-emacs-state-modes 'compilation-mode)
 (add-to-list 'evil-emacs-state-modes 'special-mode)
 
+(defun project-current-root ()
+  "Get the root of the current project."
+  (and-let* ((project (project-current)))
+    (project-root project)))
+
+(defun add-project-root-to-compilation-search-path ()
+  "Add the project root to the compilation search path."
+  (and-let* ((root    (project-current-root)))
+    (add-to-list 'compilation-search-path root)))
+(add-hook 'prog-mode-hook #'add-project-root-to-compilation-search-path)
+
+
+(require 'treesit)
+(setq-default treesit-font-lock-level 4)
+
+(defun treesit-node-rust-function-p (node)
+  "Return `t` if NODE is a function definition node."
+  (string-equal (treesit-node-type node) "function_item"))
+
+(defun rust-function-at-point ()
+  "Get the name of the current function."
+  (and-let* ((_ (treesit-available-p))
+             (node (treesit-node-at (point)))
+             (function-node (treesit-parent-until
+                             node
+                             #'treesit-node-rust-function-p))
+             (function-name-node (treesit-node-child-by-field-name
+                                  function-node
+                                  "name")))
+    (treesit-node-text function-name-node t)))
+
+(defun consult-compile--rust ()
+  "Get the compile commands for Rust."
+  `("cargo nextest run"
+    "cargo build"
+    "cargo clippy"
+    ,(concat "cargo nextest run " (or (rust-function-at-point) "no-rust-function-at-point"))))
+
+(defun consult-compile ()
+  "Get the default compile directory for the current buffer."
+  (interactive)
+  (let* ((default-directory (project-root (project-current)))
+         (cmds              (consult-compile--rust))
+         (cmd               (completing-read "Command: " cmds)))
+    (compile cmd)))
+
+(define-key evil-motion-state-map (kbd "g b") #'consult-bookmark)
+(global-set-key (kbd "C-c g") #'consult-ripgrep)
+(global-set-key (kbd "C-c l") #'consult-line)
+(global-set-key (kbd "C-c p") #'consult-project-extra-find)
+(global-set-key (kbd "C-c s") #'sort-lines)
+(global-set-key (kbd "C-c t") #'consult-compile)
+(global-set-key (kbd "C-c x") #'consult-complex-command)
+
 ;; Colorize compilation buffer.
 (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
 
 ;; Use eat for terminal. It adds color.
 (require 'eat)
 (add-hook 'eshell-load-hook #'eat-eshell-mode)
-
-(defun wm-compile-cmds ()
-  "Get the valid compile commands for the current buffer."
-  (let ((cmds '((conf-toml-mode . ("cargo test"
-                                   "cargo build"))
-		(markdown-mode . ("bundle exec jekyll serve --livereload"))
-		(ruby-mode . ("bundle exec jekyll serve --livereload"
-			      "bundle update"))
-                (rust-mode . ("cargo test"
-                              "cargo build"))
-		(zig-mode . ("zig build test --summary all"
-			     "zig build run --summary all"
-			     "zig build check --summary all" "zig build install --summary all"))
-		)))
-    (alist-get major-mode cmds)))
-
-(defvar wm-compile--hist '())
-
-(defun wm-compile ()
-  "Run a common compile command."
-  (interactive)
-  (let* ((name->cmd (wm-compile-cmds))
-         (cmd       (ivy-completing-read "Command: "
-                                         name->cmd
-                                         nil
-                                         t
-                                         nil
-                                         'wm-compile--hist)))
-    (compile (format "time %s" cmd))))
-
-(global-set-key (kbd "C-c C-t") #'wm-compile)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Code Formatting
@@ -235,7 +268,7 @@
 ;; Rust
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'rust-mode)
-(setenv "RUST_BACKTRACE" "1")
+(setenv "RUST_BACKTRACE" "0") ;; Set this to 1 for more stack trace info.
 (setenv "CARGO_TERM_COLOR" "always")
 (setenv "NEXTEST_HIDE_PROGRESS_BAR" "1")
 
@@ -243,9 +276,10 @@
   "Run rustfmt on save."
   (add-hook 'before-save-hook #'rust-format-buffer 0 t))
 
-(add-hook 'rust-mode-hook #'rustfmt-on-save)
-(add-hook 'rust-mode-hook #'eglot-ensure)
-(add-hook 'rust-mode-hook #'set-fill-column-100)
+(add-hook 'rust-mode-hook #'rust-ts-mode)
+(add-hook 'rust-ts-mode-hook #'rustfmt-on-save)
+(add-hook 'rust-ts-mode-hook #'eglot-ensure)
+(add-hook 'rust-ts-mode-hook #'set-fill-column-100)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Zig
@@ -257,7 +291,6 @@
 (add-hook 'zig-mode-hook #'eglot-ensure)
 (add-hook 'zig-mode-hook #'set-fill-column-100)
 (add-hook 'zig-mode-hook #'filladapt-mode)
-(define-key zig-mode-map (kbd "C-c C-t") #'wm-compile)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Markdown
@@ -266,7 +299,6 @@
 (add-hook 'markdown-mode-hook #'delete-trailing-whitespace-on-save)
 (add-hook 'markdown-mode-hook #'set-fill-column-80)
 (add-hook 'markdown-mode-hook #'auto-fill-mode)
-(define-key markdown-mode-map (kbd "C-c C-t") #'wm-compile)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File Browsing
@@ -286,8 +318,7 @@
               ring-bell-function #'ignore
               scroll-conservatively 101
               display-line-numbers-grow-only t
-              display-line-numbers-width 3
-              initial-frame-alist '((fullscreen . maximized)))
+              display-line-numbers-width 3)
 (blink-cursor-mode -1)
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
@@ -317,10 +348,7 @@
 
 (require 'diminish)
 (diminish 'company-mode)
-(diminish 'counsel-mode)
 (diminish 'eldoc-mode)
-(diminish 'ivy-posframe-mode)
-(diminish 'ivy-mode)
 (diminish 'which-key-mode)
 (diminish 'auto-revert-mode)
 (diminish 'auto-fill-function)
