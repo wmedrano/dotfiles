@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree evil-anzu anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode evil-commentary ace-window zig-mode evil modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
+   '(company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -32,24 +32,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Keybindings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(require 'evil)
-(evil-mode)
-(define-key evil-motion-state-map (kbd "n") #'evil-next-line)
-(define-key evil-motion-state-map (kbd "e") #'evil-previous-line)
-(define-key evil-motion-state-map (kbd "j") #'evil-search-next)
-(define-key evil-motion-state-map (kbd "J") #'evil-search-backward)
+(require 'cua-base)
+(cua-mode)
 (global-set-key (kbd "<home>") #'beginning-of-buffer)
 (global-set-key (kbd "<end>")  #'end-of-buffer)
 
-(require 'evil-commentary)
-(evil-commentary-mode)
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Window management
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'ace-window)
 (setq-default aw-dispatch-always t
               mouse-autoselect-window t)
 (global-set-key (kbd "C-w") #'ace-window)
-(define-key evil-motion-state-map (kbd "C-w") nil t)
-(define-key evil-insert-state-map (kbd "C-w") nil t)
+
+(require 'winner)
+(winner-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Editor completion
@@ -77,8 +74,6 @@
 (global-set-key (kbd "C-x b") #'consult-buffer)
 (global-set-key (kbd "C-x p b") #'consult-project-buffer)
 (require 'consult-register)
-(define-key evil-motion-state-map (kbd "g b") #'consult-register)
-(define-key evil-motion-state-map (kbd "g m") #'consult-register-store)
 
 (require 'consult-project-extra)
 (global-set-key (kbd "C-x p p") #'consult-project-extra-find)
@@ -117,10 +112,6 @@
 (setq-default eldoc-idle-delay 0.6
 	      eldoc-echo-area-use-multiline-p nil)
 
-(require 'xref)
-(define-key xref--xref-buffer-mode-map (kbd "e") #'xref-prev-line)
-(add-to-list 'evil-emacs-state-modes 'xref--xref-buffer-mode)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Autocomplete
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -136,7 +127,6 @@
 (require 'flymake)
 (define-key flymake-mode-map (kbd "<f8>") #'flymake-goto-next-error)
 (define-key flymake-mode-map (kbd "S-<f8>") #'flymake-show-buffer-diagnostics)
-(evil-declare-not-repeat #'flymake-goto-next-error)
 
 (setq-default compile-command "")
 (setq-default
@@ -145,9 +135,6 @@
  next-error-message-highlight   'keep)
 (global-set-key (kbd "<f5>") #'recompile)
 (define-key compilation-mode-map (kbd "<f8>") #'compilation-next-error)
-(delete 'compilation-mode evil-motion-state-modes)
-(add-to-list 'evil-emacs-state-modes 'compilation-mode)
-(add-to-list 'evil-emacs-state-modes 'special-mode)
 
 (defun project-current-root ()
   "Get the root of the current project."
@@ -195,7 +182,6 @@
          (cmd               (completing-read "Command: " cmds)))
     (compile cmd)))
 
-(define-key evil-motion-state-map (kbd "g b") #'consult-bookmark)
 (global-set-key (kbd "C-c g") #'consult-ripgrep)
 (global-set-key (kbd "C-c l") #'consult-line)
 (global-set-key (kbd "C-c p") #'consult-project-extra-find)
@@ -236,7 +222,6 @@
 (global-auto-revert-mode)
 (define-key magit-status-mode-map (kbd "C-w") #'ace-window)
 (define-key magit-status-mode-map (kbd "e")   #'magit-section-backward)
-(add-hook 'git-commit-mode-hook #'evil-insert-state)
 
 (require 'diff-hl)
 (require 'diff-hl-flydiff)
@@ -353,7 +338,6 @@
 (diminish 'auto-revert-mode)
 (diminish 'auto-fill-function)
 (diminish 'which-key-mode)
-(diminish 'evil-commentary-mode)
 
 (provide 'init)
 ;;; init.el ends here
