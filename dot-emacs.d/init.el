@@ -243,6 +243,7 @@
 (defun elisp-eval-on-save ()
   "Run `eval-buffer` on save."
   (interactive)
+  (eval-buffer)
   (add-hook 'after-save-hook #'eval-buffer 0 t))
 
 (defun elisp-init-eval-on-save ()
