@@ -24,6 +24,23 @@ SIGNAL - The signal from the process."
     (insert string)
     (ansi-color-apply-on-region begin (point))))
 
+(defun jekyll-reset-buffer ()
+  "Reset the jekyll buffer."
+  (setq jekyll-serve-url-opened nil)
+  (when-let* ((buffer (get-buffer jekyll-proc-buffer-name)))
+    (with-current-buffer buffer
+      (when-let* ((proc (get-buffer-process buffer)))
+        (kill-process proc))
+      (erase-buffer))))
+
+(defun jekyll-make-process (&rest args)
+  "Like `make-process` but handles tramp connections as well.
+
+ARGS - Arguments to `make-process` call."
+  (if-let ((fnh (find-file-name-handler default-directory 'make-process)))
+      (apply fnh #'make-process args)
+    (apply #'make-process args)))
+
 (defun jekyll-serve-filter (proc string)
   "Filter for `jekyll-serve`.
 
@@ -38,24 +55,15 @@ STRING - The output from jekyll serve."
           (setq jekyll-serve-url-opened t)
           (browse-url-at-point))))))
 
-(defun jekyll-reset-buffer ()
-  "Reset the jekyll buffer."
-  (setq jekyll-serve-url-opened nil)
-  (when-let* ((buffer (get-buffer jekyll-proc-buffer-name)))
-    (with-current-buffer buffer
-      (when-let* ((proc (get-buffer-process buffer)))
-        (kill-process proc))
-      (erase-buffer))))
-
 (defun jekyll-serve ()
   "Run jekyll serve."
   (interactive)
   (jekyll-reset-buffer)
-  (make-process :name "jekyll serve"
-                :buffer jekyll-proc-buffer-name
-                :command `("bundle" "exec" "jekyll" "serve" "--livereload")
-                :filter #'jekyll-serve-filter
-                :sentinel #'jekyll-sentinel-display-buffer-on-error))
+  (jekyll-make-process :name "jekyll serve"
+                       :buffer jekyll-proc-buffer-name
+                       :command `("bundle" "exec" "jekyll" "serve" "--livereload")
+                       :filter #'jekyll-serve-filter
+                       :sentinel #'jekyll-sentinel-display-buffer-on-error))
 
 (defun jekyll-build-filter (proc string)
   "Filter for `jekyll-build`.
@@ -69,11 +77,11 @@ STRING - The output from jekyll build."
   "Run jekyll build."
   (interactive)
   (jekyll-reset-buffer)
-  (make-process :name "jekyll build"
-                :buffer jekyll-proc-buffer-name
-                :command `("bundle" "exec" "jekyll" "build")
-                :filter #'jekyll-build-filter
-                :sentinel #'jekyll-sentinel-display-buffer-on-error))
+  (jekyll-make-process :name "jekyll build"
+                       :buffer jekyll-proc-buffer-name
+                       :command `("bundle" "exec" "jekyll" "build")
+                       :filter #'jekyll-build-filter
+                       :sentinel #'jekyll-sentinel-display-buffer-on-error))
 
 (provide 'jekyll)
 ;;; jekyll.el ends here
