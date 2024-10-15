@@ -127,7 +127,6 @@
               company-idle-delay 0.1)
 (global-company-mode)
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Syntax & Compile Errors
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -135,8 +134,9 @@
 (define-key flymake-mode-map (kbd "<f8>") #'flymake-goto-next-error)
 (define-key flymake-mode-map (kbd "S-<f8>") #'flymake-show-buffer-diagnostics)
 
-(setq-default compile-command "")
 (setq-default
+ compile-command                ""
+ compilation-scroll-output      t
  next-error-highlight-no-select t
  next-error-highlight           t
  next-error-message-highlight   'keep)
@@ -161,40 +161,6 @@
 (defun treesit-node-rust-function-p (node)
   "Return `t` if NODE is a function definition node."
   (string-equal (treesit-node-type node) "function_item"))
-
-(defun rust-function-at-point ()
-  "Get the name of the current function."
-  (and-let* ((_ (treesit-available-p))
-             (node (treesit-node-at (point)))
-             (function-node (treesit-parent-until
-                             node
-                             #'treesit-node-rust-function-p))
-             (function-name-node (treesit-node-child-by-field-name
-                                  function-node
-                                  "name")))
-    (treesit-node-text function-name-node t)))
-
-(defun consult-compile--rust ()
-  "Get the compile commands for Rust."
-  `("cargo nextest run"
-    "cargo build"
-    "cargo clippy"
-    ,(concat "cargo nextest run " (or (rust-function-at-point) "no-rust-function-at-point"))))
-
-(defun consult-compile ()
-  "Get the default compile directory for the current buffer."
-  (interactive)
-  (let* ((default-directory (project-root (project-current)))
-         (cmds              (consult-compile--rust))
-         (cmd               (completing-read "Command: " cmds)))
-    (compile cmd)))
-
-(global-set-key (kbd "C-c g") #'consult-ripgrep)
-(global-set-key (kbd "C-c l") #'consult-line)
-(global-set-key (kbd "C-c p") #'consult-project-extra-find)
-(global-set-key (kbd "C-c s") #'sort-lines)
-(global-set-key (kbd "C-c t") #'consult-compile)
-(global-set-key (kbd "C-c x") #'consult-complex-command)
 
 ;; Colorize compilation buffer.
 (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
@@ -268,6 +234,37 @@
 (defun rustfmt-on-save ()
   "Run rustfmt on save."
   (add-hook 'before-save-hook #'rust-format-buffer 0 t))
+
+(defun rust-function-at-point ()
+  "Get the name of the current function."
+  (and-let* ((_ (treesit-available-p))
+             (node (treesit-node-at (point)))
+             (function-node (treesit-parent-until
+                             node
+                             #'treesit-node-rust-function-p))
+             (function-name-node (treesit-node-child-by-field-name
+                                  function-node
+                                  "name")))
+    (treesit-node-text function-name-node t)))
+
+(defun cargo-clippy-fix ()
+  "Use cargo clippy to fix all files within the workspace."
+  (interactive)
+  (compile "cargo clippy --fix --allow-dirty"))
+
+(defun cargo-test ()
+  "Run cargo test."
+  (interactive)
+  (compile "cargo nextest run"))
+
+(defun cargo-test-function-at-point ()
+  "Run cargo test for the current function.
+
+If there is no function at the point, then all tests are run."
+  (interactive)
+  (if-let ((fap (rust-function-at-point)))
+      (compile (concat "cargo test " fap))
+    (cargo-test)))
 
 (add-hook 'rust-mode-hook #'rust-ts-mode)
 (add-hook 'rust-ts-mode-hook #'rustfmt-on-save)
