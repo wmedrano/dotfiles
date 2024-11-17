@@ -7,7 +7,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(async caddyfile-mode expand-region company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
+   '(geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -247,6 +247,11 @@
                                   "name")))
     (treesit-node-text function-name-node t)))
 
+(defun cargo-clippy ()
+  "Run cargo clippy."
+  (interactive)
+  (compile "cargo clippy"))
+
 (defun cargo-clippy-fix ()
   "Use cargo clippy to fix all files within the workspace."
   (interactive)
@@ -255,7 +260,7 @@
 (defun cargo-test ()
   "Run cargo test."
   (interactive)
-  (compile "cargo nextest run"))
+  (compile "cargo nextest run --no-fail-fast"))
 
 (defun cargo-test-function-at-point ()
   "Run cargo test for the current function.
@@ -283,12 +288,28 @@ If there is no function at the point, then all tests are run."
 (add-hook 'zig-mode-hook #'filladapt-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Guile
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'geiser-guile)
+(setq-default geiser-guile-binary "guile3.0")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Markdown
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'markdown-mode)
 (add-hook 'markdown-mode-hook #'delete-trailing-whitespace-on-save)
 (add-hook 'markdown-mode-hook #'set-fill-column-80)
 (add-hook 'markdown-mode-hook #'auto-fill-mode)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Org
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq-default org-support-shift-select t
+              org-src-fontify-natively t)
+(org-babel-do-load-languages
+ ;; Requires installing geiser.
+ 'org-babel-load-languages '((scheme . t)
+                             (python . t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File Browsing
@@ -320,9 +341,9 @@ If there is no function at the point, then all tests are run."
     (set-frame-font "JetBrains Mono 10")
   (set-frame-font "JetBrains Mono 14"))
 
-(require 'monokai-pro-theme)
-(mapc #'disable-theme custom-enabled-themes)
-(load-theme 'monokai-pro t)
+;; (require 'monokai-pro-theme)
+;; (mapc #'disable-theme custom-enabled-themes)
+;; (load-theme 'monokai-pro t)
 
 (require 'transient-posframe)
 (transient-posframe-mode)

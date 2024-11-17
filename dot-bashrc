@@ -55,8 +55,12 @@ fi
 if ! [[ "$PATH" =~ "$HOME/.spore/bin" ]]; then
     PATH="$HOME/.spore/bin:$PATH"
 fi
+if ! [[ "$PATH" =~ "$HOME/.qlot/bin" ]]; then
+    PATH="$HOME/.qlot/bin:$PATH"
+fi
 
 . "$HOME/.cargo/env"
 export PATH
 
 alias callgrind="valgrind --tool=callgrind --simulate-cache=yes --dump-instr=yes --collect-jumps=yes"
+alias guile="guile3.0"
