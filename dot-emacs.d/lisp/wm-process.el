@@ -21,6 +21,11 @@ ARGS - Arguments to `make-process` call."
       (insert string)
       (ansi-color-apply-on-region begin (point)))))
 
+(defun process-message-event (proc event)
+  "Run message function with PROC and EVENT.
+
+Useful as a sentinel that prints the status of a terminated process."
+  (message "Process %s exited with: %s" proc event))
 
 (provide 'wm-process)
 ;;; wm-process.el ends here
