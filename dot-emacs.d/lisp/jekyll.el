@@ -1,4 +1,5 @@
-;;; jekyll --- Jekyll interface for Emacs. -*- lexical-binding: t -*-
+;;; jekyll --- Jekyll interface for Emacs.
+;;; -*- lexical-binding: t -*-
 ;;; Commentary:
 ;;; Code:
 
