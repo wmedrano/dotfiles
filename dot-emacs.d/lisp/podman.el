@@ -1,4 +1,4 @@
-;;; package --- Emacs configuration.
+;;; package --- Emacs configuration. -*- lexical-binding: t; -*-
 ;;; Commentary:
 ;;; Code:
 

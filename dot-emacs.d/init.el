@@ -7,8 +7,10 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(custom-safe-themes
+   '("16198c5c7319d07ded977d2414a96fff95f468af313cff6f684fd02f9dfff9b2" default))
  '(package-selected-packages
-   '(chatgpt-shell zig-ts-mode spacemacs-theme elpy evil gdscript-mode org-preview-html geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
+   '(elysium gptel chatgpt-shell zig-ts-mode spacemacs-theme elpy evil gdscript-mode org-preview-html geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -363,6 +365,20 @@ If there is no function at the point, then all tests are run."
 (require 'chatgpt-shell)
 (setq-default
  chatgpt-shell-google-key (secrets-get-secret "kdewallet" "gemini"))
+
+(require 'gptel)
+(require 'gptel-gemini)
+(setq-default
+ gptel-model 'gemini-2.0-flash-thinking-exp
+ gptel-backend (gptel-make-gemini "Gemini"
+                 :key (secrets-get-secret "kdewallet" "gemini")
+                 :stream t))
+
+
+(require 'elysium)
+
+;; Defined under lisp/codename-goose.el
+(require 'codename-goose)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Look & Feel

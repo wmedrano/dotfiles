@@ -1,4 +1,4 @@
-;;; wm-process --- Process utilities.
+;;; wm-process --- Process utilities. -*- lexical-binding: t; -*-
 ;;; Commentary:
 ;;; Code:
 
@@ -12,14 +12,19 @@ ARGS - Arguments to `make-process` call."
       (apply fnh #'make-process args)
     (apply #'make-process args)))
 
-
 (defun process-append-colorized-text (proc string)
   "Add STRING to buffer for PROC."
   (with-current-buffer (process-buffer proc)
-    (goto-char (point-max))
-    (let ((begin (point)))
-      (insert string)
-      (ansi-color-apply-on-region begin (point)))))
+    (save-excursion
+      (goto-char (point-max))
+      (let ((begin (point)))
+        (insert string)
+        (ansi-color-apply-on-region begin (point)))
+      (goto-char 0)
+      (while (re-search-forward ".*\r" nil :noerror)
+        (replace-match ""))
+      (goto-char 0)
+      )))
 
 (defun process-message-event (proc event)
   "Run message function with PROC and EVENT.
