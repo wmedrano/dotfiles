@@ -1,4 +1,5 @@
 ;;; package --- Emacs configuration.
+;;; -*- lexical-binding: t; -*-
 ;;; Commentary:
 ;;; Code:
 (custom-set-variables
@@ -7,7 +8,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
+   '(chatgpt-shell zig-ts-mode spacemacs-theme elpy evil gdscript-mode org-preview-html geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -20,7 +21,6 @@
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Custom libraries
@@ -39,6 +39,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Keybindings
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'evil)
+(evil-mode)
+(define-key evil-motion-state-map (kbd "h") #'evil-backward-char)
+(define-key evil-motion-state-map (kbd "n") #'evil-next-line)
+(define-key evil-motion-state-map (kbd "e") #'evil-previous-line)
+(define-key evil-motion-state-map (kbd "l") #'evil-forward-char)
+(define-key evil-motion-state-map (kbd "j") #'evil-search-next)
+(define-key evil-motion-state-map (kbd "<home>") #'evil-goto-first-line)
+(define-key evil-motion-state-map (kbd "<end>") #'evil-goto-line)
+(define-key evil-motion-state-map (kbd "<return>") nil)
+(define-key evil-motion-state-map (kbd "RET") nil)
+(add-to-list 'evil-motions 'flymake-goto-next-error)
+(add-to-list 'evil-motions 'flymake-goto-prev-error)
+
 (require 'cua-base)
 (cua-mode)
 (global-set-key (kbd "<home>") #'beginning-of-buffer)
@@ -51,6 +65,8 @@
 (setq-default aw-dispatch-always t
               mouse-autoselect-window t)
 (global-set-key (kbd "C-w") #'ace-window)
+(define-key evil-motion-state-map (kbd "C-w") nil)
+(define-key evil-insert-state-map (kbd "C-w") nil)
 
 (require 'winner)
 (winner-mode)
@@ -136,7 +152,7 @@
 
 (setq-default
  compile-command                ""
- compilation-scroll-output      t
+ compilation-scroll-output      nil
  next-error-highlight-no-select t
  next-error-highlight           t
  next-error-message-highlight   'keep)
@@ -195,6 +211,7 @@
 (global-auto-revert-mode)
 (define-key magit-status-mode-map (kbd "C-w") #'ace-window)
 (define-key magit-status-mode-map (kbd "e")   #'magit-section-backward)
+(add-hook 'git-commit-mode-hook #'evil-insert-state 0 t)
 
 (require 'diff-hl)
 (require 'diff-hl-flydiff)
@@ -237,7 +254,7 @@
 
 (defun rust-function-at-point ()
   "Get the name of the current function."
-  (and-let* ((_ (treesit-available-p))
+  (and-let* ((available (treesit-available-p))
              (node (treesit-node-at (point)))
              (function-node (treesit-parent-until
                              node
@@ -255,12 +272,22 @@
 (defun cargo-clippy-fix ()
   "Use cargo clippy to fix all files within the workspace."
   (interactive)
-  (compile "cargo clippy --fix --allow-dirty"))
+  (compile "cargo clippy --fix --allow-dirty --allow-staged"))
 
 (defun cargo-test ()
   "Run cargo test."
   (interactive)
   (compile "cargo nextest run --no-fail-fast"))
+
+(defun cargo-run ()
+  "Run cargo run."
+  (interactive)
+  (compile "cargo run"))
+
+(defun cargo-build ()
+  "Run cargo build."
+  (interactive)
+  (compile "cargo build"))
 
 (defun cargo-test-function-at-point ()
   "Run cargo test for the current function.
@@ -275,6 +302,13 @@ If there is no function at the point, then all tests are run."
 (add-hook 'rust-ts-mode-hook #'rustfmt-on-save)
 (add-hook 'rust-ts-mode-hook #'eglot-ensure)
 (add-hook 'rust-ts-mode-hook #'set-fill-column-100)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; GDScript - Godot
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'gdscript-mode)
+(add-hook 'gdscript-mode-hook #'eglot-ensure)
+(define-key gdscript-comint--mode-map (kbd "<f5>") #'gdscript-godot-run-project)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Zig
@@ -310,6 +344,7 @@ If there is no function at the point, then all tests are run."
  ;; Requires installing geiser.
  'org-babel-load-languages '((scheme . t)
                              (python . t)))
+(add-hook 'org-mode-hook #'set-fill-column-80)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File Browsing
@@ -321,6 +356,13 @@ If there is no function at the point, then all tests are run."
 
 (require 'nerd-icons-dired)
 (add-hook 'dired-mode-hook #'nerd-icons-dired-mode)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; LLM
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'chatgpt-shell)
+(setq-default
+ chatgpt-shell-google-key (secrets-get-secret "kdewallet" "gemini"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Look & Feel
@@ -337,13 +379,11 @@ If there is no function at the point, then all tests are run."
 (global-display-line-numbers-mode)
 (global-hl-line-mode)
 (column-number-mode)
-(if (string-equal (system-name) "quest")
-    (set-frame-font "JetBrains Mono 10")
-  (set-frame-font "JetBrains Mono 14"))
+(set-frame-font "JetBrains Mono 10")
 
-;; (require 'monokai-pro-theme)
-;; (mapc #'disable-theme custom-enabled-themes)
-;; (load-theme 'monokai-pro t)
+(require 'monokai-pro-theme)
+(mapc #'disable-theme custom-enabled-themes)
+(load-theme 'monokai-pro t)
 
 (require 'transient-posframe)
 (transient-posframe-mode)
@@ -364,6 +404,8 @@ If there is no function at the point, then all tests are run."
 (diminish 'auto-revert-mode)
 (diminish 'auto-fill-function)
 (diminish 'which-key-mode)
+
+(add-to-list 'default-frame-alist '(fullscreen . maximized))
 
 (provide 'init)
 ;;; init.el ends here
