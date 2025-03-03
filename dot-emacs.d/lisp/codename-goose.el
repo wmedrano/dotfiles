@@ -54,7 +54,7 @@
     (save-excursion
       (with-current-buffer goose-proc-buffer-name
         (goto-char (point-max))
-        (insert (propertize message 'face 'menu) "\n")))
+        (insert "<" (current-time-string) ">" (propertize message 'face 'menu) "\n")))
     (process-send-string proc (concat message "\n"))
     (display-buffer goose-proc-buffer-name)))
 
@@ -83,6 +83,13 @@ Gooses should only change the current file."
   (goose-end)
   (goose-start)
   (display-buffer goose-proc-buffer-name))
+
+(defun goose-open-hints ()
+  "Open the goosehints file."
+  (interactive)
+  (let ((proc (goose-maybe-start)))
+    (with-current-buffer (process-buffer proc)
+      (find-file ".goosehints"))))
 
 (provide 'codename-goose)
 ;;; codename-goose.el ends here

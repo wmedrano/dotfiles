@@ -10,7 +10,7 @@
  '(custom-safe-themes
    '("16198c5c7319d07ded977d2414a96fff95f468af313cff6f684fd02f9dfff9b2" default))
  '(package-selected-packages
-   '(elysium gptel chatgpt-shell zig-ts-mode spacemacs-theme elpy evil gdscript-mode org-preview-html geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm consult-project-extra consult-eglot consult nerd-icons-completion marginalia orderless vertico-posframe vertico smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
+   '(counsel swiper ivy-posframe ivy evil-commentary elysium gptel chatgpt-shell zig-ts-mode spacemacs-theme elpy evil gdscript-mode org-preview-html geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
@@ -51,9 +51,13 @@
 (define-key evil-motion-state-map (kbd "<home>") #'evil-goto-first-line)
 (define-key evil-motion-state-map (kbd "<end>") #'evil-goto-line)
 (define-key evil-motion-state-map (kbd "<return>") nil)
+(define-key evil-normal-state-map (kbd "<return>") #'ignore)
 (define-key evil-motion-state-map (kbd "RET") nil)
 (add-to-list 'evil-motions 'flymake-goto-next-error)
 (add-to-list 'evil-motions 'flymake-goto-prev-error)
+
+(require 'evil-commentary)
+(evil-commentary-mode t)
 
 (require 'cua-base)
 (cua-mode)
@@ -76,32 +80,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Editor completion
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(require 'vertico)
 (setq-default enable-recursive-minibuffers t)
-(vertico-mode t)
 
-(require 'orderless)
-(setq-default completion-styles '(basic orderless)
-              completion-category-overrides '((file (styles basic partial-completion))))
+(require 'ivy)
+(ivy-mode t)
 
-(require 'vertico-posframe)
-(setq-default vertico-posframe-border-width 2)
-(vertico-posframe-mode t)
+(require 'ivy-posframe)
+(add-hook 'after-init-hook #'ivy-posframe-mode)
 
-(require 'nerd-icons-completion)
-(nerd-icons-completion-mode)
-(add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup)
+(require 'counsel)
+(define-key counsel-mode-map (kbd "C-x b") #'counsel-switch-buffer)
+(define-key counsel-mode-map (kbd "C-x B") #'counsel-switch-buffer-other-window)
+(counsel-mode t)
 
-(require 'marginalia)
-(marginalia-mode t)
-
-(require 'consult)
-(global-set-key (kbd "C-x b") #'consult-buffer)
-(global-set-key (kbd "C-x p b") #'consult-project-buffer)
-(require 'consult-register)
-
-(require 'consult-project-extra)
-(global-set-key (kbd "C-x p p") #'consult-project-extra-find)
+(require 'swiper)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LSP - Eglot
@@ -136,6 +128,7 @@
 (require 'eldoc)
 (setq-default eldoc-idle-delay 0.6
 	      eldoc-echo-area-use-multiline-p nil)
+(add-to-list 'evil-emacs-state-modes #'xref--xref-buffer-mode)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Autocomplete
@@ -209,7 +202,8 @@
 ;; Version Control
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'magit)
-(setq-default magit-auto-revert-immediately t)
+(setq-default
+ magit-auto-revert-immediately t)
 (global-auto-revert-mode)
 (define-key magit-status-mode-map (kbd "C-w") #'ace-window)
 (define-key magit-status-mode-map (kbd "e")   #'magit-section-backward)
@@ -219,6 +213,7 @@
 (require 'diff-hl-flydiff)
 (global-diff-hl-mode)
 (add-hook 'diff-hl-mode-hook #'diff-hl-flydiff-mode)
+(add-hook 'after-revert-hook #'diff-hl-update)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Emacs Lisp
@@ -379,6 +374,25 @@ If there is no function at the point, then all tests are run."
 
 ;; Defined under lisp/codename-goose.el
 (require 'codename-goose)
+(defun goose-fix-unit-tests ()
+  "Tell goose to fix each unit test."
+  (interactive)
+  (goose-do "Fix all unit tests."))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Other
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun revert-all-buffers ()
+  "Revert all buffers that are visiting files.
+This function iterates through all buffers in the current Emacs session
+and reverts those buffers which are associated with a file on disk.
+This is useful to reload files that might have been changed externally."
+  (interactive)
+  (seq-doseq (buffer (buffer-list))
+         (with-current-buffer buffer
+           (when buffer-file-name
+             (revert-buffer-quick)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Look & Feel
