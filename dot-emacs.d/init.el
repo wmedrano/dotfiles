@@ -217,7 +217,7 @@
 (global-auto-revert-mode)
 (define-key magit-status-mode-map (kbd "C-w") #'ace-window)
 (define-key magit-status-mode-map (kbd "e")   #'magit-section-backward)
-(add-hook 'git-commit-mode-hook #'evil-insert-state 0 t)
+(add-hook 'git-commit-mode-hook #'evil-insert-state)
 
 (require 'diff-hl)
 (require 'diff-hl-flydiff)
@@ -407,11 +407,13 @@ This is useful to reload files that might have been changed externally."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Look & Feel
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(setq-default inhibit-startup-screen t
-              ring-bell-function #'ignore
-              scroll-conservatively 101
-              display-line-numbers-grow-only t
-              display-line-numbers-width 3)
+(setq-default
+ inhibit-startup-screen                   t
+ ring-bell-function                       #'ignore
+ scroll-conservatively                    101
+ display-line-numbers-grow-only           t
+ display-line-numbers-width               3
+ native-comp-async-report-warnings-errors nil)
 (blink-cursor-mode -1)
 (scroll-bar-mode -1)
 (tool-bar-mode -1)
