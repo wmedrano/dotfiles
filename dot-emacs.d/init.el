@@ -163,6 +163,7 @@
  next-error-message-highlight   'keep)
 (global-set-key (kbd "<f5>") #'recompile)
 (define-key compilation-mode-map (kbd "<f8>") #'compilation-next-error)
+(define-key compilation-mode-map (kbd "<s-f8>") #'compilation-previous-error)
 
 (defun project-current-root ()
   "Get the root of the current project."
