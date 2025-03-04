@@ -98,6 +98,11 @@
 (define-key counsel-mode-map (kbd "C-x B") #'counsel-switch-buffer-other-window)
 (counsel-mode t)
 
+(require 'ivy-rich)
+(require 'nerd-icons-ivy-rich)
+(ivy-rich-mode t)
+(nerd-icons-ivy-rich-mode t)
+
 (require 'swiper)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
