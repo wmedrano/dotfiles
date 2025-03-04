@@ -110,8 +110,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'eglot)
 (require 'eglot-booster)
-(setq-default eglot-events-buffer-size 0
-              eglot-extend-to-xref t)
+(setq-default
+ eglot-extend-to-xref t)
 
 (defun eglot-format-on-save ()
   "Run `eglot-format-buffer` on save."
