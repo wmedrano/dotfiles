@@ -10,7 +10,7 @@
  '(custom-safe-themes
    '("16198c5c7319d07ded977d2414a96fff95f468af313cff6f684fd02f9dfff9b2" default))
  '(package-selected-packages
-   '(counsel swiper ivy-posframe ivy evil-commentary elysium gptel chatgpt-shell zig-ts-mode spacemacs-theme elpy evil gdscript-mode org-preview-html geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
+   '(llm nerd-icons-ivy-rich ivy-rich counsel swiper ivy-posframe ivy evil-commentary elysium gptel chatgpt-shell zig-ts-mode spacemacs-theme elpy evil gdscript-mode org-preview-html geiser-guile htmlize clojure-ts-mode async caddyfile-mode expand-region company-posframe vterm smartparens undo-tree anzu nord-theme monokai-pro-theme edit-indirect eat dracula-theme filladapt doom-modeline go-mode ace-window zig-mode modus-themes diff-hl dired-posframe which-key-posframe which-key transient-posframe markdown-mode diminish yaml-mode eglot-booster rust-mode magit company))
  '(package-vc-selected-packages
    '((eglot-booster :vc-backend Git :url "https://github.com/jdtsmith/eglot-booster.git"))))
 (custom-set-faces
