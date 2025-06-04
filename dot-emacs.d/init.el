@@ -43,6 +43,8 @@
 (scroll-bar-mode -1)
 (blink-cursor-mode -1)
 
+(setq-default display-line-numbers-grow-only t
+              display-line-numbers-width     3)
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 (global-hl-line-mode t)
 
