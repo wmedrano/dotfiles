@@ -7,10 +7,10 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window company consult diff-hl doom-modeline doom-themes gptel htmlize
-                magit marginalia markdown-mode markdown-ts-mode
-                nerd-icons-completion orderless rg rust-mode vertico yaml-mode
-                zig-ts-mode)))
+   '(ace-window company consult diff-hl doom-modeline doom-themes dracula-theme
+                expand-region gptel htmlize magit marginalia markdown-mode
+                markdown-ts-mode monokai-pro-theme nerd-icons-completion
+                orderless rg rust-mode vertico vundo yaml-mode zig-ts-mode)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -47,11 +47,13 @@
 (setq-default display-line-numbers-grow-only t
               display-line-numbers-width     3)
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
-(global-hl-line-mode t)
 
 (require 'doom-modeline)
-(when (not (custom-theme-enabled-p 'doom-dracula))
-  (load-theme 'doom-dracula t))
+(let ((desired-theme 'dracula))
+  (when (or (length> custom-enabled-themes 1)
+            (not (custom-theme-enabled-p desired-theme)))
+    (mapc #'disable-theme custom-enabled-themes)
+    (load-theme desired-theme t)))
 (doom-modeline-mode t)
 
 ;; Despite being `next-error' which is usually reserved for compilation mode,
@@ -69,6 +71,10 @@
 (cua-mode t)
 (global-set-key (kbd "<home>") #'beginning-of-buffer)
 (global-set-key (kbd "<end>")  #'end-of-buffer)
+
+(require 'vundo)
+(global-set-key (kbd "C-z") #'vundo)
+(define-key cua--cua-keys-keymap (kbd "C-z") #'vundo)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File System
@@ -122,8 +128,11 @@
               scroll-margin         5)
 
 (require 'ace-window)
+(require 'magit)
 (setq-default aw-dispatch-always t)
-(global-set-key (kbd "C-c w") #'ace-window)
+(global-set-key                   (kbd "C-c w") #'ace-window)
+(global-set-key                   (kbd "C-w")   #'ace-window)
+(define-key magit-status-mode-map (kbd "C-w")   #'ace-window)
 
 (require 'winner)
 (winner-mode)
@@ -153,11 +162,13 @@
 (require 'eglot)
 (setq-default eglot-extend-to-xref)
 (add-hook 'rust-mode-hook #'eglot-ensure)
+(add-hook 'zig-ts-mode-hook  #'eglot-ensure)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Formatting
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq-default delete-pair-blink-delay 0)
 (electric-pair-mode t)
 
 (defun fill-column-100 ()
