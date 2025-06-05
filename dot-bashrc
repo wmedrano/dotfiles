@@ -50,7 +50,7 @@ fi
 
 # Path
 if ! [[ "$PATH" =~ "$HOME/.local/bin" ]]; then
-    PATH="$HOME/.local/bin"
+    PATH="$HOME/.local/bin:$PATH"
 fi
 if ! [[ "$PATH" =~ "$HOME/.spore/bin" ]]; then
     PATH="$HOME/.spore/bin:$PATH"
@@ -58,7 +58,7 @@ fi
 if ! [[ "$PATH" =~ "$HOME/.qlot/bin" ]]; then
     PATH="$HOME/.qlot/bin:$PATH"
 fi
-if ! [[ "PATH" =~ "$HOME/.cargo/bin" ]]; then
+if ! [[ "$PATH" =~ "$HOME/.cargo/bin" ]]; then
     PATH="$HOME/.cargo/bin:$PATH"
 fi
 

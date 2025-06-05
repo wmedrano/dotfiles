@@ -8,8 +8,9 @@
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
    '(ace-window company consult diff-hl doom-modeline doom-themes gptel htmlize
-                magit marginalia markdown-mode nerd-icons-completion orderless
-                rg rust-mode vertico yaml-mode zig-ts-mode)))
+                magit marginalia markdown-mode markdown-ts-mode
+                nerd-icons-completion orderless rg rust-mode vertico yaml-mode
+                zig-ts-mode)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -142,9 +143,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq-default
  treesit-language-source-alist
- '((rust . ("https://github.com/tree-sitter/tree-sitter-rust.git" "v0.24.0"))
-   (yaml . ("https://github.com/ikatyang/tree-sitter-yaml" "v0.5.0"))
-   (zig  . ("https://github.com/maxxnino/tree-sitter-zig.git"))))
+ '((rust     . ("https://github.com/tree-sitter/tree-sitter-rust.git" "v0.24.0"))
+   (yaml     . ("https://github.com/ikatyang/tree-sitter-yaml" "v0.5.0"))
+   (zig      . ("https://github.com/maxxnino/tree-sitter-zig.git"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LSP
@@ -232,8 +233,9 @@
 
 (defun emacs-lisp-config-eval-after-save ()
   "Enable `emacs-lisp-eval-after-save-mode' for the main configuration."
-  (when (string-match-p "/init.el$" (buffer-file-name))
-    (emacs-lisp-eval-after-save-mode)))
+  (let ((file-name (buffer-file-name)))
+    (when (and file-name (string-match-p "/init.el$" (buffer-file-name)))
+      (emacs-lisp-eval-after-save-mode))))
 (add-hook 'emacs-lisp-mode-hook #'emacs-lisp-config-eval-after-save)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
