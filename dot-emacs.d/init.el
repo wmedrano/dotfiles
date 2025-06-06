@@ -50,10 +50,9 @@
 
 (require 'doom-modeline)
 (let ((desired-theme 'dracula))
-  (when (or (length> custom-enabled-themes 1)
-            (not (custom-theme-enabled-p desired-theme)))
-    (mapc #'disable-theme custom-enabled-themes)
-    (load-theme desired-theme t)))
+  (mapc #'disable-theme custom-enabled-themes)
+  (load-theme desired-theme t)
+  (set-face-attribute 'line-number-current-line nil :background (face-attribute 'ansi-color-magenta :background)))
 (doom-modeline-mode t)
 
 ;; Despite being `next-error' which is usually reserved for compilation mode,
