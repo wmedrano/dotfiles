@@ -7,22 +7,26 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window company consult diff-hl doom-modeline doom-themes dracula-theme
-                expand-region gptel htmlize magit marginalia markdown-mode
-                markdown-ts-mode monokai-pro-theme nerd-icons-completion
-                orderless rg rust-mode vertico vundo yaml-mode zig-ts-mode)))
+   '(ace-window auto-highlight-symbol company consult diff-hl doom-modeline
+                doom-themes dracula-theme eat expand-region gptel htmlize magit
+                marginalia markdown-mode markdown-ts-mode monokai-pro-theme
+                nerd-icons-completion orderless rg rust-mode vertico vundo
+                yaml-mode zig-ts-mode)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- )
+ '(ahs-face ((t (:foreground "GhostWhite" :background "#6272A4"))))
+ '(ahs-plugin-default-face ((t (:foreground "Black"  :background "#FFB86C"))))
+ '(line-number-current-line ((t (:inherit 'highlight :background nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Packages
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(add-to-list 'load-path (format "%slisp" user-emacs-directory))
 
 (package-initialize)
 
@@ -48,12 +52,14 @@
               display-line-numbers-width     3)
 (add-hook 'prog-mode-hook #'display-line-numbers-mode)
 
-(require 'doom-modeline)
-(let ((desired-theme 'dracula))
-  (mapc #'disable-theme custom-enabled-themes)
-  (load-theme desired-theme t)
-  (set-face-attribute 'line-number-current-line nil :background (face-attribute 'ansi-color-magenta :background)))
+(require 'dracula-theme)
+(mapc #'disable-theme custom-enabled-themes)
+(load-theme 'dracula t)
 (doom-modeline-mode t)
+
+(require 'auto-highlight-symbol)
+(setq-default ahs-idle-interval 0.2)
+(global-auto-highlight-symbol-mode t)
 
 ;; Despite being `next-error' which is usually reserved for compilation mode,
 ;; the highlight times also apply to search buffers like `occur-mode' and
