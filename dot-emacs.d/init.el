@@ -72,8 +72,8 @@
 (global-set-key (kbd "<end>")  #'end-of-buffer)
 
 (require 'vundo)
-(global-set-key (kbd "C-z") #'vundo)
-(define-key cua--cua-keys-keymap (kbd "C-z") #'vundo)
+(global-set-key (kbd "C-S-Z") #'vundo)
+(define-key cua--cua-keys-keymap (kbd "C-S-Z") #'vundo)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File System
