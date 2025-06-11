@@ -18,7 +18,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(ahs-face ((t (:foreground "GhostWhite" :background "#6272A4"))))
- '(ahs-plugin-default-face ((t (:foreground "Black"  :background "#FFB86C"))))
+ '(ahs-plugin-default-face ((t (:foreground "Black" :background "#FFB86C"))))
  '(line-number-current-line ((t (:inherit 'highlight :background nil)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -157,16 +157,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq-default
  treesit-language-source-alist
- '((rust     . ("https://github.com/tree-sitter/tree-sitter-rust.git" "v0.24.0"))
+ '((python   . ("https://github.com/tree-sitter/tree-sitter-python.git" "v0.23.6"))
+   (rust     . ("https://github.com/tree-sitter/tree-sitter-rust.git" "v0.24.0"))
    (yaml     . ("https://github.com/ikatyang/tree-sitter-yaml" "v0.5.0"))
    (zig      . ("https://github.com/maxxnino/tree-sitter-zig.git"))))
+
+(add-to-list 'auto-mode-alist '("\\.py$" . python-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.rs$" . rust-ts-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LSP
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (require 'eglot)
-(setq-default eglot-extend-to-xref)
-(add-hook 'rust-mode-hook #'eglot-ensure)
+(setq-default eglot-extend-to-xref t)
+(add-hook 'rust-ts-mode-hook #'eglot-ensure)
 (add-hook 'zig-ts-mode-hook  #'eglot-ensure)
 
 
@@ -212,6 +216,7 @@
 (setq-default compile-command "")
 (add-hook 'compilation-filter-hook 'ansi-color-compilation-filter)
 
+(global-set-key (kbd "<f5>") #'recompile)
 
 ;; Flymake is usually enabled automatically with Eglot mode. However, some modes
 ;; do not use LSP/Eglot.
@@ -230,6 +235,12 @@
 (add-hook 'text-mode-hook #'flyspell-mode)
 (cl-loop for key in '("C-," "C-;" "C-." "C-c $" "C-M-i")
          do (define-key flyspell-mode-map (kbd key) nil t))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; LLM
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(require 'gptel)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Emacs Lisp
@@ -269,7 +280,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Rust
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(add-to-list 'major-mode-remap-alist '(rust-mode . rust-ts-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Zig
