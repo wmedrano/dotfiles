@@ -252,7 +252,10 @@
          do  (add-to-list 'elisp-flymake-byte-compile-load-path path))
 
 (define-minor-mode emacs-lisp-eval-after-save-mode
-  "Evaluate the current Emacs Lisp buffer after a successful save.")
+  "Evaluate the current Emacs Lisp buffer after a successful save."
+  :init-value nil
+  :global     nil
+  (when emacs-lisp-eval-after-save-mode (eval-buffer)))
 
 (defun emacs-lisp-maybe-eval-after-save ()
   "Evaluate the current buffer if `emacs-lisp-eval-after-save-mode' is enabled."
