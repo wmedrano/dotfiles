@@ -19,7 +19,7 @@
  ;; If there is more than one, they won't work right.
  '(ahs-face ((t (:foreground "GhostWhite" :background "#6272A4"))))
  '(ahs-plugin-default-face ((t (:foreground "Black" :background "#FFB86C"))))
- '(line-number-current-line ((t (:inherit 'highlight :background nil)))))
+ '(line-number-current-line ((t (:inherit 'highlight)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Packages
