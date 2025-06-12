@@ -198,6 +198,8 @@
 (add-hook 'before-save-hook #'delete-trailing-whitespace)
 (add-hook 'before-save-hook #'eglot-format-buffer-before-save)
 
+(global-set-key (kbd "C-,") #'er/expand-region)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Code Auto Complete
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
