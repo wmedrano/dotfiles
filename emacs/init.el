@@ -110,6 +110,12 @@
   :init
   (idle-gc-mode))
 
+(use-package monorepo
+  :load-path "user-lisp"
+  :init
+  (autoload 'monorepo-project-try "monorepo")
+  (add-hook 'project-find-functions #'monorepo-project-try))
+
 (use-package jj
   :load-path "user-lisp/jj"
   :commands (jj jj-log))
