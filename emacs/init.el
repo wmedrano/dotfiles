@@ -101,8 +101,14 @@
   (idle-gc-mode))
 
 (use-package which-key
+  :custom
+  (which-key-lighter "")
   :init
   (which-key-mode))
+
+(use-package eldoc
+  :custom
+  (eldoc-minor-mode-string nil))
 
 (use-package display-line-numbers
   :custom

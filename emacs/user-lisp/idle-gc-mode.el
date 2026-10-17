@@ -23,7 +23,6 @@
 (define-minor-mode idle-gc-mode
   "Run the garbage collector when Emacs has been idle for a while."
   :global t
-  :lighter " IdleGC"
   (when (timerp idle-gc-mode--timer)
     (cancel-timer idle-gc-mode--timer))
   (setq idle-gc-mode--timer
