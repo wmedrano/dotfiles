@@ -1,0 +1,8 @@
+/emacs/auto-save-list/
+/emacs/elpa/
+/emacs/eln-cache/
+/emacs/history
+/emacs/projects.eld
+/emacs/tree-sitter/
+/emacs/user-lisp/*.elc
+/emacs/user-lisp/.user-lisp-autoloads.el
