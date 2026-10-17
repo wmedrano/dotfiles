@@ -112,7 +112,9 @@
 
 (use-package jj
   :load-path "user-lisp/jj"
-  :commands jj-log)
+  :commands jj-log
+  :config
+  (defalias 'jj #'jj-log))
 
 (use-package which-key
   :defer 2

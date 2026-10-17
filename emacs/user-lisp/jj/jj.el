@@ -186,6 +186,40 @@ Return the process exit status.  The output is uncolored so that
             (message "jj diff exited with status %s" status))))
       (pop-to-buffer buffer))))
 
+(defun jj--revision-overlays ()
+  "Return the `jj--revision' overlays in the current buffer, in order."
+  (sort (cl-remove-if-not (lambda (o) (overlay-get o 'jj--revision))
+                          (overlays-in (point-min) (point-max)))
+        (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+
+(defun jj--revision-overlay-at-point ()
+  "Return the `jj--revision' overlay containing point, or nil."
+  (cl-find-if (lambda (o)
+                (and (<= (overlay-start o) (point))
+                     (< (point) (overlay-end o))))
+              (jj--revision-overlays)))
+
+(defun jj-log-next-revision ()
+  "Move to the next revision in a `jj-log-mode' buffer."
+  (interactive)
+  (let ((next (cl-find-if (lambda (o) (> (overlay-start o) (point)))
+                          (jj--revision-overlays))))
+    (unless next
+      (user-error "No next revision"))
+    (goto-char (overlay-start next))))
+
+(defun jj-log-prev-revision ()
+  "Move to the previous revision in a `jj-log-mode' buffer."
+  (interactive)
+  (let* ((current (jj--revision-overlay-at-point))
+         (limit (if current (overlay-start current) (point)))
+         (prev (car (last (cl-remove-if (lambda (o)
+                                          (>= (overlay-start o) limit))
+                                        (jj--revision-overlays))))))
+    (unless prev
+      (user-error "No previous revision"))
+    (goto-char (overlay-start prev))))
+
 (defvar jj-log-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
@@ -193,6 +227,8 @@ Return the process exit status.  The output is uncolored so that
     (define-key map (kbd "RET") #'jj-edit)
     (define-key map (kbd "<return>") #'jj-edit)
     (define-key map (kbd "d") #'jj-diff)
+    (define-key map (kbd "n") #'jj-log-next-revision)
+    (define-key map (kbd "p") #'jj-log-prev-revision)
     map)
   "Keymap for `jj-log-mode'.")
 
