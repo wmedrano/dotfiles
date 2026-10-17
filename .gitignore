@@ -6,3 +6,8 @@
 /emacs/tree-sitter/
 /emacs/user-lisp/*.elc
 /emacs/user-lisp/.user-lisp-autoloads.el
+/pi/agent/auth.json
+/pi/agent/bin/
+/pi/agent/install/
+/pi/agent/models-store.json
+/pi/agent/sessions/

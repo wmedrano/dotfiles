@@ -23,3 +23,4 @@ link() {
 link "$repo/emacs" "$HOME/.emacs.d"
 link "$repo/wezterm" "$HOME/.config/wezterm"
 link "$repo/bash/bashrc" "$HOME/.bashrc"
+link "$repo/pi" "$HOME/.pi"
