@@ -129,9 +129,14 @@
   :ensure t
   :bind ("M-o" . ace-window))
 
+(defun display-line-numbers-off ()
+  "Disable display-line-numbers in the current buffer."
+  (display-line-numbers-mode -1))
+
 (use-package display-line-numbers
   :custom
   (display-line-numbers-width 3)
+  :hook (diff-mode . display-line-numbers-off)
   :init
   (global-display-line-numbers-mode))
 
