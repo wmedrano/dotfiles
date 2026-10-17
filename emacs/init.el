@@ -67,6 +67,8 @@
   (menu-bar-mode nil)
   (scroll-bar-mode nil)
   (use-short-answers t)
+  (initial-frame-alist '((fullscreen . maximized)))
+  (default-frame-alist '((fullscreen . maximized)))
   (inhibit-startup-screen t)
   (auto-save-default nil)
   (make-backup-files nil)
