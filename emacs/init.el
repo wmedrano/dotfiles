@@ -63,6 +63,10 @@
 
 (use-package emacs
   :custom
+  (tool-bar-mode nil)
+  (menu-bar-mode nil)
+  (scroll-bar-mode nil)
+  (use-short-answers t)
   (inhibit-startup-screen t)
   (auto-save-default nil)
   (make-backup-files nil)
