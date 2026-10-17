@@ -52,19 +52,25 @@
   bookmarks
   current-working-copy-p)
 
+(defun jj--call (directory destination &rest args)
+  "Run `jj' with ARGS in DIRECTORY and return the exit status.
+Output goes to DESTINATION, as in `process-file'.  `jj-arguments' are
+placed before ARGS, so ARGS can override them."
+  (let ((default-directory (file-name-as-directory directory)))
+    (apply #'process-file
+           jj-executable nil destination nil
+           (append jj-arguments args))))
+
 (defun jj--root (&optional directory)
   "Return the Jujutsu repository root for DIRECTORY, or nil.
 DIRECTORY defaults to `default-directory'.  Return nil when not inside
 a Jujutsu repository or when the `jj' executable is unavailable."
-  (let ((default-directory (file-name-as-directory
-                            (or directory default-directory))))
-    (with-temp-buffer
-      (when (and (executable-find jj-executable)
-                 (eql 0 (apply #'process-file
-                               jj-executable nil (list t nil) nil
-                               (append '("root") jj-arguments))))
-        (let ((root (string-trim (buffer-string))))
-          (unless (string-empty-p root) root))))))
+  (with-temp-buffer
+    (when (and (executable-find jj-executable)
+               (eql 0 (jj--call (or directory default-directory)
+                                (list t nil) "root")))
+      (let ((root (string-trim (buffer-string))))
+        (unless (string-empty-p root) root)))))
 
 (defun jj--log-template ()
   "Return the jj template used to render and annotate the log."
@@ -98,10 +104,9 @@ Each revision block gets a `jj--revision' overlay property holding a
   "Return the `jj--revision' struct at point, or nil."
   (get-char-property (point) 'jj--revision))
 
-;;;###autoload
-(defun jj-edit ()
-  "Edit the revision at point with `jj edit'."
-  (interactive)
+(defun jj--run-on-revision (&rest args)
+  "Run `jj' with ARGS followed by the change id of the revision at point.
+Show the command output as a message and refresh the log on success."
   (let ((revision (jj--revision-at-point)))
     (unless revision
       (user-error "No revision at point"))
@@ -109,17 +114,26 @@ Each revision block gets a `jj--revision' overlay property holding a
            (root (or (jj--root)
                      (user-error "Not inside a Jujutsu repository"))))
       (with-temp-buffer
-        (let* ((default-directory (file-name-as-directory root))
-               (status (apply #'process-file
-                              jj-executable nil (list (current-buffer) t) nil
-                              (append (list "edit" change-id)
-                                      jj-arguments)))
+        (let* ((status (apply #'jj--call root (list (current-buffer) t)
+                              (append args (list change-id))))
                (output (string-trim
                         (ansi-color-filter-apply (buffer-string)))))
           (unless (string-empty-p output)
             (message "%s" output))
           (when (eql 0 status)
             (jj-log)))))))
+
+;;;###autoload
+(defun jj-edit ()
+  "Edit the revision at point with `jj edit'."
+  (interactive)
+  (jj--run-on-revision "edit"))
+
+;;;###autoload
+(defun jj-new ()
+  "Create a new revision on top of the revision at point with `jj new -r'."
+  (interactive)
+  (jj--run-on-revision "new" "-r"))
 
 (defvar-local jj-diff--revision nil
   "Change id of the revision rendered in the current `jj-diff-mode' buffer.")
@@ -137,17 +151,14 @@ Return the process exit status.  The output is uncolored so that
     ;; otherwise `setq-local' would write the dynamic binding instead.
     (setq-local default-directory root)
     (setq-local jj-diff--revision change-id)
-    (let ((default-directory root))
-      (let ((status (apply #'process-file
-                           jj-executable nil (list (current-buffer) t) nil
-                           ;; `--color=never' overrides any `--color' in
-                           ;; `jj-arguments'; `diff-mode' supplies the colors.
-                           (append (list "diff" "--git" "-r" change-id)
-                                   jj-arguments
-                                   (list "--color=never")))))
-        (font-lock-ensure)
-        (goto-char (point-min))
-        status))))
+    (let ((status (jj--call root (list (current-buffer) t)
+                            "diff" "--git" "-r" change-id
+                            ;; `--color=never' overrides any `--color' in
+                            ;; `jj-arguments'; `diff-mode' supplies the colors.
+                            "--color=never")))
+      (font-lock-ensure)
+      (goto-char (point-min))
+      status)))
 
 (defun jj-diff--refresh ()
   "Re-render the diff buffer for `jj-diff--revision'."
@@ -220,13 +231,22 @@ Return the process exit status.  The output is uncolored so that
       (user-error "No previous revision"))
     (goto-char (overlay-start prev))))
 
+(defvar jj-log-revision-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "e") #'jj-edit)
+    (define-key map (kbd "n") #'jj-new)
+    (define-key map (kbd "d") #'jj-diff)
+    map)
+  "Keymap of actions on the revision at point, reached via RET.")
+
 (defvar jj-log-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map (kbd "g") #'jj-log)
-    (define-key map (kbd "RET") #'jj-edit)
-    (define-key map (kbd "<return>") #'jj-edit)
+    (define-key map (kbd "e") #'jj-edit)
     (define-key map (kbd "d") #'jj-diff)
+    (define-key map (kbd "RET") jj-log-revision-map)
+    (define-key map (kbd "<return>") jj-log-revision-map)
     (define-key map (kbd "n") #'jj-log-next-revision)
     (define-key map (kbd "p") #'jj-log-prev-revision)
     map)
@@ -259,18 +279,19 @@ overlay on each revision block."
         (erase-buffer)
         (jj-log-mode)
         (setq-local default-directory root)
-        (let ((coding-system-for-read 'utf-8)
-              (default-directory root))
-          (let ((status (apply #'process-file
-                               jj-executable nil (list buffer nil) nil
-                               (append (list "log" "-T" (jj--log-template))
-                                       jj-arguments))))
-            (ansi-color-apply-on-region (point-min) (point-max))
-            (if (eql 0 status)
-                (jj--log-finalize)
-              (message "jj log exited with status %s" status))
-            (goto-char (point-min))))))
+        (let* ((coding-system-for-read 'utf-8)
+               (status (jj--call root (list buffer nil)
+                                 "log" "-T" (jj--log-template))))
+          (ansi-color-apply-on-region (point-min) (point-max))
+          (if (eql 0 status)
+              (jj--log-finalize)
+            (message "jj log exited with status %s" status))
+          (goto-char (point-min)))))
     (pop-to-buffer buffer)))
+
+;;;###autoload
+(defalias 'jj #'jj-log
+  "Show the output of `jj log'.  Alias for `jj-log'.")
 
 (provide 'jj)
 ;;; jj.el ends here

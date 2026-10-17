@@ -112,14 +112,13 @@
 
 (use-package jj
   :load-path "user-lisp/jj"
-  :commands jj-log
-  :config
-  (defalias 'jj #'jj-log))
+  :commands (jj jj-log))
 
 (use-package which-key
   :defer 2
   :custom
   (which-key-lighter "")
+  (which-key-idle-delay 0.2)
   :init
   (which-key-mode))
 
