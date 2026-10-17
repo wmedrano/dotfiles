@@ -74,6 +74,12 @@
   :config
   (set-face-attribute 'default nil :family "JetBrains Mono" :height 140))
 
+(use-package custom
+  :custom
+  (custom-theme-directory (locate-user-emacs-file "user-lisp"))
+  :config
+  (load-theme 'wezterm t))
+
 (use-package rust-ts-mode
   :mode "\\.rs\\'"
   :hook (rust-ts-mode . eglot-ensure))
