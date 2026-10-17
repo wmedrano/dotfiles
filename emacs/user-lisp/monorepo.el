@@ -211,6 +211,7 @@ DIR is relative to ROOT, which defaults to the monorepo enclosing
 ;;;###autoload
 (defun monorepo-find-file (&optional root)
   "Visit the marker file of the monorepo project at ROOT.
+
 ROOT defaults to the monorepo enclosing `default-directory'.
 Interactively, offer to create a marker file if there is none."
   (interactive (list (monorepo--find-root t)))

@@ -129,6 +129,9 @@
   :init
   (which-key-mode))
 
+(use-package flymake
+  :hook (emacs-lisp-mode . flymake-mode))
+
 (use-package eldoc
   :custom
   (eldoc-minor-mode-string nil))
