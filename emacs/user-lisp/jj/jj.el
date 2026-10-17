@@ -406,15 +406,16 @@ Ask for confirmation first.  On success, kill the diff buffer."
         (kill-buffer buffer)))))
 
 (defun jj--output (&rest args)
-  "Return the uncolored output of `jj ARGS' in the repository root.
-Signal a `user-error' with jj's output if the command fails."
+  "Return the uncolored standard output of `jj ARGS' in the repository root.
+Signal a `user-error' if the command fails."
   (let ((root (or (jj--root)
                   (user-error "Not inside a Jujutsu repository"))))
     (with-temp-buffer
-      (let ((status (apply #'jj--call root (list t t)
+      (let ((status (apply #'jj--call root (list t nil)
                            (append args '("--color=never")))))
         (unless (eql 0 status)
-          (user-error "%s" (string-trim (buffer-string))))
+          (user-error "jj %s exited with status %s"
+                      (string-join args " ") status))
         (buffer-string)))))
 
 (defun jj--description (change-id)
