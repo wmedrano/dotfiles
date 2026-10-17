@@ -332,10 +332,14 @@ remote."
 (defvar-local jj-diff--revision nil
   "Change id of the revision rendered in the current `jj-diff-mode' buffer.")
 
-(defun jj-diff--fill (change-id)
-  "Render `jj diff --git -r CHANGE-ID' into the current buffer.
-Return the process exit status.  The output is uncolored so that
-`diff-mode' can font-lock it."
+(defvar-local jj-diff--from nil
+  "Revision the current `jj-diff-mode' buffer diffs from, or nil for its parent.")
+
+(defun jj-diff--fill (change-id &optional from)
+  "Render the diff of CHANGE-ID into the current buffer.
+Show `jj diff --git -r CHANGE-ID', or `jj diff --git --from FROM --to
+CHANGE-ID' when FROM is non-nil.  Return the process exit status.  The
+output is uncolored so that `diff-mode' can font-lock it."
   (let* ((root (or (jj--root)
                    (user-error "Not inside a Jujutsu repository")))
          (root (file-name-as-directory root))
@@ -345,11 +349,18 @@ Return the process exit status.  The output is uncolored so that
     ;; otherwise `setq-local' would write the dynamic binding instead.
     (setq-local default-directory root)
     (setq-local jj-diff--revision change-id)
-    (let ((status (jj--call root (list (current-buffer) t)
-                            "diff" "--git" "-r" change-id
-                            ;; `--color=never' overrides any `--color' in
-                            ;; `jj-arguments'; `diff-mode' supplies the colors.
-                            "--color=never")))
+    (setq-local jj-diff--from from)
+    (setq-local header-line-format
+                (when from (format "Diff from %s to %s" from change-id)))
+    (let ((status (apply #'jj--call root (list (current-buffer) t)
+                         "diff" "--git"
+                         ;; jj rejects `-r' combined with `--from'.
+                         (append (if from
+                                     (list "--from" from "--to" change-id)
+                                   (list "-r" change-id))
+                                 ;; `--color=never' overrides any `--color' in
+                                 ;; `jj-arguments'; `diff-mode' supplies the colors.
+                                 '("--color=never")))))
       (font-lock-ensure)
       (goto-char (point-min))
       status)))
@@ -357,7 +368,7 @@ Return the process exit status.  The output is uncolored so that
 (defun jj-diff--refresh ()
   "Re-render the diff buffer for `jj-diff--revision'."
   (interactive)
-  (jj-diff--fill jj-diff--revision))
+  (jj-diff--fill jj-diff--revision jj-diff--from))
 
 (defvar jj-diff-mode-map
   (let ((map (make-sparse-keymap)))
@@ -377,20 +388,48 @@ Return the process exit status.  The output is uncolored so that
   (setq-local revert-buffer-function
               (lambda (_ignore-auto _noconfirm) (jj-diff--refresh))))
 
+(defun jj-diff--show (change-id &optional from)
+  "Show the diff of CHANGE-ID, optionally from FROM, in the diff buffer.
+See `jj-diff--fill'."
+  (let ((buffer (get-buffer-create jj-diff-buffer-name)))
+    (with-current-buffer buffer
+      (jj-diff-mode)
+      (let ((status (jj-diff--fill change-id from)))
+        (unless (eql 0 status)
+          (message "jj diff exited with status %s" status))))
+    (pop-to-buffer buffer)))
+
 ;;;###autoload
 (defun jj-diff ()
   "Show `jj diff --git -r REVISION' for the revision at point."
   (interactive)
-  (let ((revision (jj--revision-at-point)))
-    (unless revision
-      (user-error "No revision at point"))
-    (let ((buffer (get-buffer-create jj-diff-buffer-name)))
-      (with-current-buffer buffer
-        (jj-diff-mode)
-        (let ((status (jj-diff--fill (jj--revision-change-id revision))))
-          (unless (eql 0 status)
-            (message "jj diff exited with status %s" status))))
-      (pop-to-buffer buffer))))
+  (let ((revision (or (jj--revision-at-point)
+                      (user-error "No revision at point"))))
+    (jj-diff--show (jj--revision-change-id revision))))
+
+(defun jj--read-revision (prompt)
+  "Read a revision with PROMPT, completing over bookmarks and common revsets.
+Any revset may be entered.  The default is \"@-\"."
+  (let ((revision (completing-read
+                   (format-prompt prompt "@-")
+                   (append '("@" "@-" "trunk()") (jj--bookmark-names))
+                   nil nil nil nil "@-")))
+    (when (string-empty-p revision)
+      (user-error "No revision given"))
+    revision))
+
+;;;###autoload
+(defun jj-diff-from (from)
+  "Show `jj diff --git --from FROM --to REVISION' for the revision at point.
+Interactively, read FROM with completion over bookmarks and common revsets."
+  (interactive
+   (progn
+     (unless (jj--revision-at-point)
+       (user-error "No revision at point"))
+     (list (jj--read-revision "Diff from"))))
+  (let ((revision (or (jj--revision-at-point)
+                      (user-error "No revision at point"))))
+    (jj-diff--show (jj--revision-change-id revision) from)))
 
 (defun jj-diff-squash ()
   "Squash the revision shown in this `jj-diff-mode' buffer into its parent.
@@ -398,6 +437,8 @@ Ask for confirmation first.  On success, kill the diff buffer."
   (interactive)
   (unless jj-diff--revision
     (user-error "No revision in this buffer"))
+  (when jj-diff--from
+    (user-error "Squash is only available for single-revision diffs"))
   (when (y-or-n-p (format "Squash %s into its parent? " jj-diff--revision))
     (let ((buffer (current-buffer)))
       ;; Keep the parent's description so jj does not open an editor.
@@ -545,6 +586,7 @@ On success, kill the buffer."
     (define-key map (kbd "n") #'jj-new)
     (define-key map (kbd "b") #'jj-bookmark)
     (define-key map (kbd "d") #'jj-diff)
+    (define-key map (kbd "D") #'jj-diff-from)
     (define-key map (kbd "m") #'jj-describe)
     (define-key map (kbd "P") #'jj-git-push-revision)
     map)
@@ -556,6 +598,7 @@ On success, kill the buffer."
     (define-key map (kbd "g") #'jj-log)
     (define-key map (kbd "e") #'jj-edit)
     (define-key map (kbd "d") #'jj-diff)
+    (define-key map (kbd "D") #'jj-diff-from)
     (define-key map (kbd "RET") jj-log-revision-map)
     (define-key map (kbd "<return>") jj-log-revision-map)
     (define-key map (kbd "n") #'jj-log-next-revision)
