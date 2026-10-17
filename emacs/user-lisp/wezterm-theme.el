@@ -38,7 +38,7 @@
    'wezterm
    `(default ((t (:foreground ,fg :background ,bg))))
    `(cursor ((t (:background ,cursor))))
-   `(region ((t (:background ,selection :extend t))))
+   `(region ((t (:foreground ,bright-white :background ,selection :extend t))))
    `(highlight ((t (:background ,split))))
    `(hl-line ((t (:background ,scrollbar :extend t))))
    `(fringe ((t (:background ,bg))))
