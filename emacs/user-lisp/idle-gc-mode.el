@@ -7,6 +7,10 @@
 
 ;;; Code:
 
+(defgroup idle-gc-mode nil
+  "Garbage collect when Emacs is idle."
+  :group 'alloc)
+
 (defcustom idle-gc-mode-delay 4
   "Seconds of idle time before `idle-gc-mode' runs the garbage collector."
   :type 'number
