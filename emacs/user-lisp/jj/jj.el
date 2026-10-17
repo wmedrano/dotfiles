@@ -104,24 +104,28 @@ Each revision block gets a `jj--revision' overlay property holding a
   "Return the `jj--revision' struct at point, or nil."
   (get-char-property (point) 'jj--revision))
 
-(defun jj--run-on-revision (&rest args)
-  "Run `jj' with ARGS followed by the change id of the revision at point.
+(defun jj--run-on-change-id (change-id &rest args)
+  "Run `jj' with ARGS followed by CHANGE-ID and return whether it succeeded.
 Show the command output as a message and refresh the log on success."
+  (let ((root (or (jj--root)
+                  (user-error "Not inside a Jujutsu repository"))))
+    (with-temp-buffer
+      (let* ((status (apply #'jj--call root (list (current-buffer) t)
+                            (append args (list change-id))))
+             (output (string-trim
+                      (ansi-color-filter-apply (buffer-string)))))
+        (unless (string-empty-p output)
+          (message "%s" output))
+        (when (eql 0 status)
+          (jj-log)
+          t)))))
+
+(defun jj--run-on-revision (&rest args)
+  "Run `jj' with ARGS followed by the change id of the revision at point."
   (let ((revision (jj--revision-at-point)))
     (unless revision
       (user-error "No revision at point"))
-    (let* ((change-id (jj--revision-change-id revision))
-           (root (or (jj--root)
-                     (user-error "Not inside a Jujutsu repository"))))
-      (with-temp-buffer
-        (let* ((status (apply #'jj--call root (list (current-buffer) t)
-                              (append args (list change-id))))
-               (output (string-trim
-                        (ansi-color-filter-apply (buffer-string)))))
-          (unless (string-empty-p output)
-            (message "%s" output))
-          (when (eql 0 status)
-            (jj-log)))))))
+    (apply #'jj--run-on-change-id (jj--revision-change-id revision) args)))
 
 ;;;###autoload
 (defun jj-edit ()
@@ -170,6 +174,7 @@ Return the process exit status.  The output is uncolored so that
     (set-keymap-parent map diff-mode-map)
     (define-key map (kbd "q") #'quit-window)
     (define-key map (kbd "g") #'jj-diff--refresh)
+    (define-key map (kbd "s") #'jj-diff-squash)
     map)
   "Keymap for `jj-diff-mode'.")
 
@@ -196,6 +201,19 @@ Return the process exit status.  The output is uncolored so that
           (unless (eql 0 status)
             (message "jj diff exited with status %s" status))))
       (pop-to-buffer buffer))))
+
+(defun jj-diff-squash ()
+  "Squash the revision shown in this `jj-diff-mode' buffer into its parent.
+Ask for confirmation first.  On success, kill the diff buffer."
+  (interactive)
+  (unless jj-diff--revision
+    (user-error "No revision in this buffer"))
+  (when (y-or-n-p (format "Squash %s into its parent? " jj-diff--revision))
+    (let ((buffer (current-buffer)))
+      ;; Keep the parent's description so jj does not open an editor.
+      (when (jj--run-on-change-id jj-diff--revision
+                                  "squash" "--use-destination-message" "-r")
+        (kill-buffer buffer)))))
 
 (defun jj--revision-overlays ()
   "Return the `jj--revision' overlays in the current buffer, in order."
