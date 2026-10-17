@@ -25,6 +25,7 @@ export default function otto(pi: ExtensionAPI) {
   let showScratchStatus = false;
   let planPath = "";
   let planStatus = PlanStatus.None;
+  let reportPath = "";
   let mode: Mode = "normal";
 
   pi.registerShortcut(Key.alt("m"), {
@@ -53,6 +54,11 @@ export default function otto(pi: ExtensionAPI) {
         break;
       case PlanStatus.Executing:
         parts.push(theme.fg("accent", `🚀 ${link}`));
+    }
+
+    // Latest report
+    if (reportPath !== "") {
+      parts.push(theme.fg("accent", `📄 ${scratchy.link(reportPath)}`));
     }
 
     // Scratch dir
@@ -236,6 +242,8 @@ export default function otto(pi: ExtensionAPI) {
   });
   async function onCommandReport(args: string, ctx: ExtensionContext) {
     const path = scratchy.reserve("report", "md");
+    reportPath = path;
+    updateStatus(ctx);
     const prompt = reportPrompt(path, args.trim());
     pi.sendUserMessage(prompt, { deliverAs: "followUp" });
   }
