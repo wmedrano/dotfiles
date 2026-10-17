@@ -2,7 +2,7 @@
  * Scratch-workspace path helpers for the otto extension.
  */
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -72,8 +72,14 @@ export class Scratchy {
   }
 
   reserve(path: string, extension: string): string {
-    const id = randomBytes(9).toString("base64url");
-    const filename = extension ? `${id}.${extension}` : id;
+    const now = new Date();
+    const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+    const stamp =
+      `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+      `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}` +
+      pad(now.getMilliseconds(), 3);
+
+    const filename = extension ? `${stamp}.${extension}` : stamp;
     const relPath = path ? join(path, filename) : filename;
     return join(this.dir, relPath);
   }
