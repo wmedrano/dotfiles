@@ -5,7 +5,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(package-selected-packages '(ace-window consult corfu diff-hl marginalia orderless vertico)))
+ '(package-selected-packages '(ace-window consult corfu diff-hl marginalia nerd-icons nerd-icons-completion orderless vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -32,8 +32,21 @@
 
 (use-package marginalia
   :ensure t
+  :config
+  (setq marginalia-annotators
+        (assq-delete-all 'project-file marginalia-annotators))
   :init
   (marginalia-mode))
+
+(use-package nerd-icons
+  :ensure t)
+
+(use-package nerd-icons-completion
+  :ensure t
+  :after marginalia
+  :hook (marginalia-mode . nerd-icons-completion-marginalia-setup)
+  :init
+  (nerd-icons-completion-mode))
 
 (use-package savehist
   :init
