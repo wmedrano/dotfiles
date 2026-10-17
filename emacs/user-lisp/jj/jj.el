@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'diff-mode)
 (require 'json)
+(require 'markdown-ts-mode)
 (require 'subr-x)
 
 (defgroup jj nil
@@ -36,6 +37,11 @@
 
 (defcustom jj-diff-buffer-name "*jj-diff*"
   "Name of the buffer showing `jj diff' output."
+  :type 'string
+  :group 'jj)
+
+(defcustom jj-describe-buffer-name "*jj-describe*"
+  "Name of the buffer for editing a revision description."
   :type 'string
   :group 'jj)
 
@@ -215,6 +221,93 @@ Ask for confirmation first.  On success, kill the diff buffer."
                                   "squash" "--use-destination-message" "-r")
         (kill-buffer buffer)))))
 
+(defun jj--description (change-id)
+  "Return the full description of CHANGE-ID."
+  (jj--output "log" "-r" change-id "--no-graph" "-T" "description"))
+
+(defun jj--diff-stat (change-id)
+  "Return the lines of `jj diff --stat' for CHANGE-ID."
+  (split-string (jj--output "diff" "--stat" "-r" change-id) "\n" t))
+
+(defvar-local jj-describe--revision nil
+  "Change id of the revision described in the current `jj-describe-mode' buffer.")
+
+(defvar jj-describe-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") #'jj-describe-commit)
+    (define-key map (kbd "C-c C-k") #'jj-describe-abort)
+    map)
+  "Keymap for `jj-describe-mode'.")
+
+;;;###autoload
+(define-derived-mode jj-describe-mode markdown-ts-mode "jj-describe"
+  "Major mode for editing a revision description.
+Lines starting with \"JJ:\" are removed when committing.
+
+\\{jj-describe-mode-map}"
+  (setq-local header-line-format
+              (substitute-command-keys
+               "\\<jj-describe-mode-map>\\[jj-describe-commit]: commit, \\[jj-describe-abort]: abort")))
+
+(defun jj-describe--insert-trailer (change-id)
+  "Insert the \"JJ:\" comment trailer for CHANGE-ID at point."
+  (let ((start (point)))
+    (insert "JJ: Change ID: " change-id "\n"
+            "JJ: This commit contains the following changes:\n")
+    (dolist (line (jj--diff-stat change-id))
+      (insert "JJ:     " line "\n"))
+    (insert "JJ:\n"
+            "JJ: Lines starting with \"JJ:\" (like this one) will be removed.\n")
+    ;; An overlay, unlike a `face' property, survives tree-sitter font-lock.
+    (overlay-put (make-overlay start (point)) 'face 'font-lock-comment-face)))
+
+;;;###autoload
+(defun jj-describe ()
+  "Edit the description of the revision at point.
+The description opens in a `jj-describe-mode' buffer; commit it with
+\\<jj-describe-mode-map>\\[jj-describe-commit] or abort with \\[jj-describe-abort]."
+  (interactive)
+  (let* ((revision (or (jj--revision-at-point)
+                       (user-error "No revision at point")))
+         (change-id (jj--revision-change-id revision))
+         (root (file-name-as-directory (jj--root)))
+         (description (string-trim-right (jj--description change-id)))
+         (buffer (get-buffer-create jj-describe-buffer-name)))
+    (with-current-buffer buffer
+      (jj-describe-mode)
+      (erase-buffer)
+      (setq-local default-directory root)
+      (setq-local jj-describe--revision change-id)
+      (insert description "\n\n")
+      (jj-describe--insert-trailer change-id)
+      (set-buffer-modified-p nil)
+      (goto-char (point-min)))
+    (pop-to-buffer buffer)))
+
+(defun jj-describe--message ()
+  "Return the description in the current buffer, without \"JJ:\" lines."
+  (let ((message (string-trim
+                  (replace-regexp-in-string
+                   "^JJ:.*\n?" ""
+                   (buffer-substring-no-properties (point-min) (point-max))))))
+    (if (string-empty-p message) "" (concat message "\n"))))
+
+(defun jj-describe-commit ()
+  "Set the description of the revision to the contents of this buffer.
+On success, kill the buffer."
+  (interactive)
+  (unless jj-describe--revision
+    (user-error "No revision in this buffer"))
+  (let ((buffer (current-buffer)))
+    (when (jj--run-on-change-id jj-describe--revision
+                                "describe" "-m" (jj-describe--message) "-r")
+      (kill-buffer buffer))))
+
+(defun jj-describe-abort ()
+  "Kill this description buffer without changing the revision."
+  (interactive)
+  (quit-window t))
+
 (defun jj--revision-overlays ()
   "Return the `jj--revision' overlays in the current buffer, in order."
   (sort (cl-remove-if-not (lambda (o) (overlay-get o 'jj--revision))
@@ -254,6 +347,7 @@ Ask for confirmation first.  On success, kill the diff buffer."
     (define-key map (kbd "e") #'jj-edit)
     (define-key map (kbd "n") #'jj-new)
     (define-key map (kbd "d") #'jj-diff)
+    (define-key map (kbd "m") #'jj-describe)
     map)
   "Keymap of actions on the revision at point, reached via RET.")
 
