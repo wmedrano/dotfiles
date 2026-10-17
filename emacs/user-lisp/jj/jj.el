@@ -45,6 +45,16 @@
   :type 'string
   :group 'jj)
 
+(defcustom jj-process-buffer-name "*jj-process*"
+  "Name of the buffer showing output of asynchronous `jj' commands."
+  :type 'string
+  :group 'jj)
+
+(defcustom jj-git-push-remote nil
+  "Remote that `jj git push' pushes to, or nil to use jj's default."
+  :type '(choice (const :tag "jj default" nil) string)
+  :group 'jj)
+
 (defconst jj--revision-fields
   '((:change-id              . "json(change_id)")
     (:description            . "json(description.first_line())")
@@ -110,21 +120,61 @@ Each revision block gets a `jj--revision' overlay property holding a
   "Return the `jj--revision' struct at point, or nil."
   (get-char-property (point) 'jj--revision))
 
-(defun jj--run-on-change-id (change-id &rest args)
-  "Run `jj' with ARGS followed by CHANGE-ID and return whether it succeeded.
-Show the command output as a message and refresh the log on success."
+(defvar jj--last-output ""
+  "Output of the most recent `jj--run' invocation.")
+
+(defun jj--run (&rest args)
+  "Run `jj' with ARGS and return whether it succeeded.
+Show the command output as a message and refresh the log on success.  The
+output is also saved in `jj--last-output'."
   (let ((root (or (jj--root)
                   (user-error "Not inside a Jujutsu repository"))))
     (with-temp-buffer
-      (let* ((status (apply #'jj--call root (list (current-buffer) t)
-                            (append args (list change-id))))
+      (let* ((status (apply #'jj--call root (list (current-buffer) t) args))
              (output (string-trim
                       (ansi-color-filter-apply (buffer-string)))))
+        (setq jj--last-output output)
         (unless (string-empty-p output)
           (message "%s" output))
         (when (eql 0 status)
           (jj-log)
           t)))))
+
+(defun jj--run-on-change-id (change-id &rest args)
+  "Run `jj' with ARGS followed by CHANGE-ID and return whether it succeeded.
+See `jj--run'."
+  (apply #'jj--run (append args (list change-id))))
+
+(defun jj--run-async (args callback)
+  "Run `jj' with ARGS asynchronously in the repository root.
+Output goes to `jj-process-buffer-name'.  When the process exits, call
+CALLBACK with its exit status and its trimmed output, with the process
+buffer current and `default-directory' set to the repository root."
+  (let* ((root (file-name-as-directory
+                (or (jj--root)
+                    (user-error "Not inside a Jujutsu repository"))))
+         (buffer (get-buffer-create jj-process-buffer-name)))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer))
+      (setq-local default-directory root))
+    (let ((default-directory root))
+      (make-process
+       :name "jj"
+       :buffer buffer
+       :command (append (list jj-executable) jj-arguments args)
+       :connection-type 'pipe
+       :file-handler t
+       :sentinel
+       (lambda (process _event)
+         (when (memq (process-status process) '(exit signal))
+           (with-current-buffer buffer
+             (let ((inhibit-read-only t))
+               (ansi-color-apply-on-region (point-min) (point-max)))
+             (funcall callback
+                      (process-exit-status process)
+                      (string-trim (buffer-substring-no-properties
+                                    (point-min) (point-max)))))))))))
 
 (defun jj--run-on-revision (&rest args)
   "Run `jj' with ARGS followed by the change id of the revision at point."
@@ -144,6 +194,140 @@ Show the command output as a message and refresh the log on success."
   "Create a new revision on top of the revision at point with `jj new -r'."
   (interactive)
   (jj--run-on-revision "new" "-r"))
+
+(defun jj--bookmark-names ()
+  "Return the names of the existing bookmarks in the repository."
+  (let ((root (or (jj--root)
+                  (user-error "Not inside a Jujutsu repository"))))
+    (with-temp-buffer
+      (when (eql 0 (jj--call root (list t nil)
+                             "bookmark" "list" "--color=never"
+                             "-T" "name ++ \"\\n\""))
+        (delete-dups (split-string (buffer-string) "\n" t))))))
+
+;;;###autoload
+(defun jj-bookmark ()
+  "Set a bookmark on the revision at point with `jj bookmark set'.
+Complete over the existing bookmarks, or enter a new name to create one.
+If jj refuses to move the bookmark backwards or sideways, offer to retry
+with `--allow-backwards'."
+  (interactive)
+  (unless (jj--revision-at-point)
+    (user-error "No revision at point"))
+  (let ((name (completing-read "Bookmark: " (jj--bookmark-names))))
+    (when (string-empty-p name)
+      (user-error "No bookmark name given"))
+    (when (and (not (jj--run-on-revision "bookmark" "set" name "-r"))
+               (string-match-p "--allow-backwards" jj--last-output)
+               (y-or-n-p (format "Could not move `%s'.  Retry with --allow-backwards? "
+                                 name)))
+      (jj--run-on-revision "bookmark" "set" name "--allow-backwards" "-r"))))
+
+(defun jj--git-remote-names ()
+  "Return the names of the Git remotes of the repository."
+  (let ((root (or (jj--root)
+                  (user-error "Not inside a Jujutsu repository"))))
+    (with-temp-buffer
+      (when (eql 0 (jj--call root (list t nil)
+                             "git" "remote" "list" "--color=never"))
+        (mapcar (lambda (line) (car (split-string line)))
+                (split-string (buffer-string) "\n" t))))))
+
+(defun jj--git-push-read-remote (prompt-p)
+  "Return the remote to push to.
+If PROMPT-P is non-nil, ask for one; otherwise use `jj-git-push-remote'."
+  (if prompt-p
+      (completing-read "Remote: " (jj--git-remote-names) nil t)
+    jj-git-push-remote))
+
+(defun jj--git-push-selector (revision)
+  "Return the `jj git push' arguments that select REVISION.
+Push the bookmarks of REVISION.  If it has none, ask for a new bookmark
+name; an empty name lets jj generate one with `--change'."
+  (let ((bookmarks (append (jj--revision-bookmarks revision) nil))
+        (change-id (jj--revision-change-id revision)))
+    (if bookmarks
+        (cl-loop for bookmark in bookmarks append (list "-b" bookmark))
+      (let ((name (read-string "New bookmark (empty to generate one): ")))
+        (if (string-empty-p name)
+            (list "-c" change-id)
+          (list "--named" (concat name "=" change-id)))))))
+
+(defun jj--git-push-preview (args)
+  "Return the summary of `jj ARGS --dry-run'.
+Signal a `user-error' with jj's output if the dry run fails or there is
+nothing to push."
+  (let ((root (or (jj--root)
+                  (user-error "Not inside a Jujutsu repository"))))
+    (with-temp-buffer
+      (let* ((status (apply #'jj--call root (list t t)
+                            (append args '("--dry-run"))))
+             (output (string-trim
+                      (ansi-color-filter-apply (buffer-string)))))
+        (when (or (not (eql 0 status))
+                  (string-match-p "^Nothing changed\\." output))
+          (user-error "%s" output))
+        (string-trim
+         (replace-regexp-in-string "^Dry-run requested, not pushing\\.$"
+                                   "" output))))))
+
+(defun jj--git-push (selector-args remote)
+  "Run `jj git push SELECTOR-ARGS' to REMOTE after confirmation.
+REMOTE nil means jj's default.  Show a `--dry-run' preview and ask before
+pushing.  The push runs asynchronously."
+  (let* ((remote-args (when remote (list "--remote" remote)))
+         (args (append '("git" "push") selector-args remote-args))
+         (preview (jj--git-push-preview args)))
+    (when (y-or-n-p (format "%s\nPush? " preview))
+      (message "Pushing...")
+      (jj--run-async args
+                     (lambda (status output)
+                       (jj--git-push-finish selector-args remote
+                                            status output))))))
+
+(defun jj--git-push-finish (selector-args remote status output)
+  "Handle the exit STATUS and OUTPUT of a push of SELECTOR-ARGS to REMOTE.
+On success refresh the log.  If jj's safety checks ask for a fetch, offer
+to fetch and retry the push."
+  (cond
+   ((eql 0 status)
+    (message "%s" output)
+    (jj--refresh-log default-directory))
+   ((and (string-match-p "jj git fetch" output)
+         (y-or-n-p (format "%s\nFetch and retry? " output)))
+    (message "Fetching...")
+    (jj--run-async (append '("git" "fetch")
+                           (when remote (list "--remote" remote)))
+                   (lambda (status output)
+                     (if (eql 0 status)
+                         (progn
+                           (jj--refresh-log default-directory)
+                           (jj--git-push selector-args remote))
+                       (message "%s" output)
+                       (display-buffer (current-buffer))))))
+   (t
+    (message "%s" output)
+    (display-buffer (current-buffer)))))
+
+;;;###autoload
+(defun jj-git-push (&optional arg)
+  "Push with `jj git push', using jj's default set of bookmarks.
+Preview the push and ask for confirmation first.  With prefix ARG, ask
+for the remote."
+  (interactive "P")
+  (jj--git-push nil (jj--git-push-read-remote arg)))
+
+;;;###autoload
+(defun jj-git-push-revision (&optional arg)
+  "Push the bookmarks of the revision at point with `jj git push'.
+If the revision has no bookmarks, ask for a name for a new one.  Preview
+the push and ask for confirmation first.  With prefix ARG, ask for the
+remote."
+  (interactive "P")
+  (let* ((revision (or (jj--revision-at-point)
+                       (user-error "No revision at point")))
+         (remote (jj--git-push-read-remote arg)))
+    (jj--git-push (jj--git-push-selector revision) remote)))
 
 (defvar-local jj-diff--revision nil
   "Change id of the revision rendered in the current `jj-diff-mode' buffer.")
@@ -220,6 +404,18 @@ Ask for confirmation first.  On success, kill the diff buffer."
       (when (jj--run-on-change-id jj-diff--revision
                                   "squash" "--use-destination-message" "-r")
         (kill-buffer buffer)))))
+
+(defun jj--output (&rest args)
+  "Return the uncolored output of `jj ARGS' in the repository root.
+Signal a `user-error' with jj's output if the command fails."
+  (let ((root (or (jj--root)
+                  (user-error "Not inside a Jujutsu repository"))))
+    (with-temp-buffer
+      (let ((status (apply #'jj--call root (list t t)
+                           (append args '("--color=never")))))
+        (unless (eql 0 status)
+          (user-error "%s" (string-trim (buffer-string))))
+        (buffer-string)))))
 
 (defun jj--description (change-id)
   "Return the full description of CHANGE-ID."
@@ -346,8 +542,10 @@ On success, kill the buffer."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "e") #'jj-edit)
     (define-key map (kbd "n") #'jj-new)
+    (define-key map (kbd "b") #'jj-bookmark)
     (define-key map (kbd "d") #'jj-diff)
     (define-key map (kbd "m") #'jj-describe)
+    (define-key map (kbd "P") #'jj-git-push-revision)
     map)
   "Keymap of actions on the revision at point, reached via RET.")
 
@@ -361,6 +559,7 @@ On success, kill the buffer."
     (define-key map (kbd "<return>") jj-log-revision-map)
     (define-key map (kbd "n") #'jj-log-next-revision)
     (define-key map (kbd "p") #'jj-log-prev-revision)
+    (define-key map (kbd "P") #'jj-git-push)
     map)
   "Keymap for `jj-log-mode'.")
 
@@ -386,20 +585,33 @@ overlay on each revision block."
   (let* ((root (or (jj--root)
                    (user-error "Not inside a Jujutsu repository")))
          (buffer (get-buffer-create jj-log-buffer-name)))
-    (with-current-buffer buffer
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (jj-log-mode)
-        (setq-local default-directory root)
-        (let* ((coding-system-for-read 'utf-8)
-               (status (jj--call root (list buffer nil)
-                                 "log" "-T" (jj--log-template))))
-          (ansi-color-apply-on-region (point-min) (point-max))
-          (if (eql 0 status)
-              (jj--log-finalize)
-            (message "jj log exited with status %s" status))
-          (goto-char (point-min)))))
+    (jj-log--fill root buffer)
     (pop-to-buffer buffer)))
+
+(defun jj-log--fill (root buffer)
+  "Render `jj log' for the repository at ROOT into BUFFER."
+  (with-current-buffer buffer
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (jj-log-mode)
+      (setq-local default-directory root)
+      (let* ((coding-system-for-read 'utf-8)
+             (status (jj--call root (list buffer nil)
+                               "log" "-T" (jj--log-template))))
+        (ansi-color-apply-on-region (point-min) (point-max))
+        (if (eql 0 status)
+            (jj--log-finalize)
+          (message "jj log exited with status %s" status))
+        (goto-char (point-min))))))
+
+(defun jj--refresh-log (root)
+  "Refresh the log buffer without displaying it, if it shows ROOT."
+  (let ((buffer (get-buffer jj-log-buffer-name)))
+    (when (and buffer
+               (equal (file-name-as-directory root)
+                      (file-name-as-directory
+                       (buffer-local-value 'default-directory buffer))))
+      (jj-log--fill root buffer))))
 
 ;;;###autoload
 (defalias 'jj #'jj-log
