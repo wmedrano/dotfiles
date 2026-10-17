@@ -40,6 +40,7 @@
   (savehist-mode))
 
 (use-package consult
+  :defer 1
   :ensure t
   :bind
   (("C-x b" . consult-buffer)
@@ -104,11 +105,13 @@
   :hook cargo-minor-mode)
 
 (use-package idle-gc-mode
+  :defer 1
   :load-path "user-lisp"
   :init
   (idle-gc-mode))
 
 (use-package which-key
+  :defer 2
   :custom
   (which-key-lighter "")
   :init
