@@ -13,6 +13,7 @@ import { Scratchy } from "./scratch.js";
 import { executePlanPrompt, scratchSystemPrompt, reportPrompt, planPrompt } from "./prompts.js";
 
 enum PlanStatus { None, InProgress, Drafted, Executing };
+enum ReportStatus { None, InProgress, Ready };
 type Mode = "auto" | "normal";
 
 const MODE_INFO: Record<Mode, { icon: string; label: string }> = {
@@ -26,6 +27,7 @@ export default function otto(pi: ExtensionAPI) {
   let planPath = "";
   let planStatus = PlanStatus.None;
   let reportPath = "";
+  let reportStatus = ReportStatus.None;
   let mode: Mode = "normal";
 
   pi.registerShortcut(Key.alt("m"), {
@@ -57,8 +59,15 @@ export default function otto(pi: ExtensionAPI) {
     }
 
     // Latest report
-    if (reportPath !== "") {
-      parts.push(theme.fg("accent", `📄 ${scratchy.link(reportPath)}`));
+    switch (reportStatus) {
+      case ReportStatus.None:
+        break;
+      case ReportStatus.InProgress:
+        parts.push(theme.fg("muted", "📄 writing…"));
+        break;
+      case ReportStatus.Ready:
+        parts.push(theme.fg("accent", `📄 ${scratchy.link(reportPath)}`));
+        break;
     }
 
     // Scratch dir
@@ -108,12 +117,17 @@ export default function otto(pi: ExtensionAPI) {
     let statusChanged = false;
     const path = event.input.path;
     const isPlan = planPath !== "" && resolve(ctx.cwd, path) === resolve(planPath);
+    const isReport = reportPath !== "" && resolve(ctx.cwd, path) === resolve(reportPath);
     if (isPlan) {
       if (planStatus === PlanStatus.InProgress) {
         planStatus = PlanStatus.Drafted;
         statusChanged = true;
       }
     } else {
+      if (isReport && reportStatus === ReportStatus.InProgress) {
+        reportStatus = ReportStatus.Ready;
+        statusChanged = true;
+      }
       showScratchStatus = true;
       statusChanged = true;
     }
@@ -243,6 +257,7 @@ export default function otto(pi: ExtensionAPI) {
   async function onCommandReport(args: string, ctx: ExtensionContext) {
     const path = scratchy.reserve("report", "md");
     reportPath = path;
+    reportStatus = ReportStatus.InProgress;
     updateStatus(ctx);
     const prompt = reportPrompt(path, args.trim());
     pi.sendUserMessage(prompt, { deliverAs: "followUp" });
