@@ -110,6 +110,10 @@
   :init
   (idle-gc-mode))
 
+(use-package jj
+  :load-path "user-lisp/jj"
+  :commands jj-log)
+
 (use-package which-key
   :defer 2
   :custom

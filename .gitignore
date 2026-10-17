@@ -4,7 +4,7 @@
 /emacs/history
 /emacs/projects.eld
 /emacs/tree-sitter/
-/emacs/user-lisp/*.elc
+/emacs/user-lisp/**/*.elc
 /emacs/user-lisp/.user-lisp-autoloads.el
 /pi/agent/auth.json
 /pi/agent/bin/
