@@ -112,6 +112,7 @@
 
 (use-package monorepo
   :load-path "user-lisp"
+  :commands (monorepo-add-directory monorepo-remove-directory monorepo-find-file)
   :init
   (autoload 'monorepo-project-try "monorepo")
   (add-hook 'project-find-functions #'monorepo-project-try))
