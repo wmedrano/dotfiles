@@ -11,6 +11,7 @@
 
 (require 'ansi-color)
 (require 'cl-lib)
+(require 'diff-mode)
 (require 'json)
 (require 'subr-x)
 
@@ -30,6 +31,11 @@
 
 (defcustom jj-log-buffer-name "*jj-log*"
   "Name of the buffer showing `jj log' output."
+  :type 'string
+  :group 'jj)
+
+(defcustom jj-diff-buffer-name "*jj-diff*"
+  "Name of the buffer showing `jj diff' output."
   :type 'string
   :group 'jj)
 
@@ -88,10 +94,105 @@ Each revision block gets a `jj--revision' overlay property holding a
                        'jj--revision
                        revision))))))
 
+(defun jj--revision-at-point ()
+  "Return the `jj--revision' struct at point, or nil."
+  (get-char-property (point) 'jj--revision))
+
+;;;###autoload
+(defun jj-edit ()
+  "Edit the revision at point with `jj edit'."
+  (interactive)
+  (let ((revision (jj--revision-at-point)))
+    (unless revision
+      (user-error "No revision at point"))
+    (let* ((change-id (jj--revision-change-id revision))
+           (root (or (jj--root)
+                     (user-error "Not inside a Jujutsu repository"))))
+      (with-temp-buffer
+        (let* ((default-directory (file-name-as-directory root))
+               (status (apply #'process-file
+                              jj-executable nil (list (current-buffer) t) nil
+                              (append (list "edit" change-id)
+                                      jj-arguments)))
+               (output (string-trim
+                        (ansi-color-filter-apply (buffer-string)))))
+          (unless (string-empty-p output)
+            (message "%s" output))
+          (when (eql 0 status)
+            (jj-log)))))))
+
+(defvar-local jj-diff--revision nil
+  "Change id of the revision rendered in the current `jj-diff-mode' buffer.")
+
+(defun jj-diff--fill (change-id)
+  "Render `jj diff --git -r CHANGE-ID' into the current buffer.
+Return the process exit status.  The output is uncolored so that
+`diff-mode' can font-lock it."
+  (let* ((root (or (jj--root)
+                   (user-error "Not inside a Jujutsu repository")))
+         (root (file-name-as-directory root))
+         (inhibit-read-only t))
+    (erase-buffer)
+    ;; Set the buffer-local outside any `let' binding of `default-directory',
+    ;; otherwise `setq-local' would write the dynamic binding instead.
+    (setq-local default-directory root)
+    (setq-local jj-diff--revision change-id)
+    (let ((default-directory root))
+      (let ((status (apply #'process-file
+                           jj-executable nil (list (current-buffer) t) nil
+                           ;; `--color=never' overrides any `--color' in
+                           ;; `jj-arguments'; `diff-mode' supplies the colors.
+                           (append (list "diff" "--git" "-r" change-id)
+                                   jj-arguments
+                                   (list "--color=never")))))
+        (font-lock-ensure)
+        (goto-char (point-min))
+        status))))
+
+(defun jj-diff--refresh ()
+  "Re-render the diff buffer for `jj-diff--revision'."
+  (interactive)
+  (jj-diff--fill jj-diff--revision))
+
+(defvar jj-diff-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map diff-mode-map)
+    (define-key map (kbd "q") #'quit-window)
+    (define-key map (kbd "g") #'jj-diff--refresh)
+    map)
+  "Keymap for `jj-diff-mode'.")
+
+;;;###autoload
+(define-derived-mode jj-diff-mode diff-mode "jj-diff"
+  "Major mode for displaying `jj diff --git' output.
+
+\\{jj-diff-mode-map}"
+  (setq-local buffer-read-only t)
+  (setq-local revert-buffer-function
+              (lambda (_ignore-auto _noconfirm) (jj-diff--refresh))))
+
+;;;###autoload
+(defun jj-diff ()
+  "Show `jj diff --git -r REVISION' for the revision at point."
+  (interactive)
+  (let ((revision (jj--revision-at-point)))
+    (unless revision
+      (user-error "No revision at point"))
+    (let ((buffer (get-buffer-create jj-diff-buffer-name)))
+      (with-current-buffer buffer
+        (jj-diff-mode)
+        (let ((status (jj-diff--fill (jj--revision-change-id revision))))
+          (unless (eql 0 status)
+            (message "jj diff exited with status %s" status))))
+      (pop-to-buffer buffer))))
+
 (defvar jj-log-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map (kbd "g") #'jj-log)
+    (define-key map (kbd "RET") #'jj-edit)
+    (define-key map (kbd "<return>") #'jj-edit)
+    (define-key map (kbd "d") #'jj-diff)
     map)
   "Keymap for `jj-log-mode'.")
 
