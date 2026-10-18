@@ -212,23 +212,29 @@ buffer current and `default-directory' set to the repository root."
         (delete-dups (split-string (buffer-string) "\n" t))))))
 
 ;;;###autoload
-(defun jj-bookmark ()
+(defun jj-bookmark (&optional arg)
   "Set a bookmark on the revision at point with `jj bookmark set'.
 
 Complete over the existing bookmarks, or enter a new name to create one.
 If jj refuses to move the bookmark backwards or sideways, offer to retry
-with `--allow-backwards'."
-  (interactive)
+with `--allow-backwards'.  Once the bookmark is set, preview `jj git push'
+of it and offer to push.  With prefix ARG, ask for the remote."
+  (interactive "P")
   (unless (jj--revision-at-point)
     (user-error "No revision at point"))
   (let ((name (completing-read "Bookmark: " (jj--bookmark-names))))
     (when (string-empty-p name)
       (user-error "No bookmark name given"))
-    (when (and (not (jj--run-on-revision "bookmark" "set" name "-r"))
-               (string-match-p "--allow-backwards" jj--last-output)
-               (y-or-n-p (format "Could not move `%s'.  Retry with --allow-backwards? "
-                                 name)))
-      (jj--run-on-revision "bookmark" "set" name "--allow-backwards" "-r"))))
+    (when (or (jj--run-on-revision "bookmark" "set" name "-r")
+              (and (string-match-p "--allow-backwards" jj--last-output)
+                   (y-or-n-p (format "Could not move `%s'.  Retry with --allow-backwards? "
+                                     name))
+                   (jj--run-on-revision "bookmark" "set" name
+                                        "--allow-backwards" "-r")))
+      ;; The bookmark is set; a failed or empty push preview is not an error.
+      (condition-case err
+          (jj--git-push (list "-b" name) (jj--git-push-read-remote arg))
+        (user-error (message "%s" (error-message-string err)))))))
 
 (defun jj--git-remote-names ()
   "Return the names of the Git remotes of the repository."
@@ -247,20 +253,6 @@ If PROMPT-P is non-nil, ask for one; otherwise use `jj-git-push-remote'."
   (if prompt-p
       (completing-read "Remote: " (jj--git-remote-names) nil t)
     jj-git-push-remote))
-
-(defun jj--git-push-selector (revision)
-  "Return the `jj git push' arguments that select REVISION.
-
-Push the bookmarks of REVISION.  If it has none, ask for a new bookmark
-name; an empty name lets jj generate one with `--change'."
-  (let ((bookmarks (append (jj--revision-bookmarks revision) nil))
-        (change-id (jj--revision-change-id revision)))
-    (if bookmarks
-        (cl-loop for bookmark in bookmarks append (list "-b" bookmark))
-      (let ((name (read-string "New bookmark (empty to generate one): ")))
-        (if (string-empty-p name)
-            (list "-c" change-id)
-          (list "--named" (concat name "=" change-id)))))))
 
 (defun jj--git-push-preview (args)
   "Return the summary of `jj ARGS --dry-run'.
@@ -329,19 +321,6 @@ Preview the push and ask for confirmation first.  With prefix ARG, ask
 for the remote."
   (interactive "P")
   (jj--git-push nil (jj--git-push-read-remote arg)))
-
-;;;###autoload
-(defun jj-git-push-revision (&optional arg)
-  "Push the bookmarks of the revision at point with `jj git push'.
-
-If the revision has no bookmarks, ask for a name for a new one.  Preview
-the push and ask for confirmation first.  With prefix ARG, ask for the
-remote."
-  (interactive "P")
-  (let* ((revision (or (jj--revision-at-point)
-                       (user-error "No revision at point")))
-         (remote (jj--git-push-read-remote arg)))
-    (jj--git-push (jj--git-push-selector revision) remote)))
 
 (defvar-local jj-diff--revision nil
   "Change id of the revision rendered in the current `jj-diff-mode' buffer.")
@@ -602,27 +581,16 @@ On success, kill the buffer."
       (user-error "No previous revision"))
     (goto-char (overlay-start prev))))
 
-(defvar jj-log-revision-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "e") #'jj-edit)
-    (define-key map (kbd "n") #'jj-new)
-    (define-key map (kbd "b") #'jj-bookmark)
-    (define-key map (kbd "d") #'jj-diff)
-    (define-key map (kbd "D") #'jj-diff-from)
-    (define-key map (kbd "m") #'jj-describe)
-    (define-key map (kbd "P") #'jj-git-push-revision)
-    map)
-  "Keymap of actions on the revision at point, reached via RET.")
-
 (defvar jj-log-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map (kbd "g") #'jj-log)
     (define-key map (kbd "e") #'jj-edit)
+    (define-key map (kbd "b") #'jj-bookmark)
     (define-key map (kbd "d") #'jj-diff)
     (define-key map (kbd "D") #'jj-diff-from)
-    (define-key map (kbd "RET") jj-log-revision-map)
-    (define-key map (kbd "<return>") jj-log-revision-map)
+    (define-key map (kbd "m") #'jj-describe)
+    (define-key map (kbd "N") #'jj-new)
     (define-key map (kbd "n") #'jj-log-next-revision)
     (define-key map (kbd "p") #'jj-log-prev-revision)
     (define-key map (kbd "P") #'jj-git-push)
