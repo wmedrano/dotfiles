@@ -229,6 +229,12 @@
   :init
   (global-display-line-numbers-mode))
 
+(use-package diff-mode
+  :bind
+  (:map diff-mode-map
+        ("RET" . diff-goto-source)
+        ("M-o" . nil)))
+
 (use-package compile
   :custom
   (compilation-scroll-output 'first-error)
