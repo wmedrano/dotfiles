@@ -70,6 +70,7 @@
 
 (defun jj--call (directory destination &rest args)
   "Run `jj' with ARGS in DIRECTORY and return the exit status.
+
 Output goes to DESTINATION, as in `process-file'.  `jj-arguments' are
 placed before ARGS, so ARGS can override them."
   (let ((default-directory (file-name-as-directory directory)))
@@ -79,8 +80,9 @@ placed before ARGS, so ARGS can override them."
 
 (defun jj--root (&optional directory)
   "Return the Jujutsu repository root for DIRECTORY, or nil.
-DIRECTORY defaults to `default-directory'.  Return nil when not inside
-a Jujutsu repository or when the `jj' executable is unavailable."
+
+DIRECTORY defaults to `default-directory'.  Return nil when not inside a
+Jujutsu repository or when the `jj' executable is unavailable."
   (with-temp-buffer
     (when (and (executable-find jj-executable)
                (eql 0 (jj--call (or directory default-directory)
@@ -96,6 +98,7 @@ a Jujutsu repository or when the `jj' executable is unavailable."
 
 (defun jj--log-finalize ()
   "Parse revision metadata from the current buffer into overlays.
+
 Each revision block gets a `jj--revision' overlay property holding a
 `jj--revision' struct.  The JSON metadata is removed from the buffer."
   (let ((inhibit-read-only t))
@@ -125,8 +128,9 @@ Each revision block gets a `jj--revision' overlay property holding a
 
 (defun jj--run (&rest args)
   "Run `jj' with ARGS and return whether it succeeded.
-Show the command output as a message and refresh the log on success.  The
-output is also saved in `jj--last-output'."
+
+Show the command output as a message and refresh the log on success.
+The output is also saved in `jj--last-output'."
   (let ((root (or (jj--root)
                   (user-error "Not inside a Jujutsu repository"))))
     (with-temp-buffer
@@ -142,11 +146,13 @@ output is also saved in `jj--last-output'."
 
 (defun jj--run-on-change-id (change-id &rest args)
   "Run `jj' with ARGS followed by CHANGE-ID and return whether it succeeded.
+
 See `jj--run'."
   (apply #'jj--run (append args (list change-id))))
 
 (defun jj--run-async (args callback)
   "Run `jj' with ARGS asynchronously in the repository root.
+
 Output goes to `jj-process-buffer-name'.  When the process exits, call
 CALLBACK with its exit status and its trimmed output, with the process
 buffer current and `default-directory' set to the repository root."
@@ -208,6 +214,7 @@ buffer current and `default-directory' set to the repository root."
 ;;;###autoload
 (defun jj-bookmark ()
   "Set a bookmark on the revision at point with `jj bookmark set'.
+
 Complete over the existing bookmarks, or enter a new name to create one.
 If jj refuses to move the bookmark backwards or sideways, offer to retry
 with `--allow-backwards'."
@@ -235,6 +242,7 @@ with `--allow-backwards'."
 
 (defun jj--git-push-read-remote (prompt-p)
   "Return the remote to push to.
+
 If PROMPT-P is non-nil, ask for one; otherwise use `jj-git-push-remote'."
   (if prompt-p
       (completing-read "Remote: " (jj--git-remote-names) nil t)
@@ -242,6 +250,7 @@ If PROMPT-P is non-nil, ask for one; otherwise use `jj-git-push-remote'."
 
 (defun jj--git-push-selector (revision)
   "Return the `jj git push' arguments that select REVISION.
+
 Push the bookmarks of REVISION.  If it has none, ask for a new bookmark
 name; an empty name lets jj generate one with `--change'."
   (let ((bookmarks (append (jj--revision-bookmarks revision) nil))
@@ -255,6 +264,7 @@ name; an empty name lets jj generate one with `--change'."
 
 (defun jj--git-push-preview (args)
   "Return the summary of `jj ARGS --dry-run'.
+
 Signal a `user-error' with jj's output if the dry run fails or there is
 nothing to push."
   (let ((root (or (jj--root)
@@ -273,8 +283,9 @@ nothing to push."
 
 (defun jj--git-push (selector-args remote)
   "Run `jj git push SELECTOR-ARGS' to REMOTE after confirmation.
-REMOTE nil means jj's default.  Show a `--dry-run' preview and ask before
-pushing.  The push runs asynchronously."
+
+REMOTE nil means jj's default.  Show a `--dry-run' preview and ask
+before pushing.  The push runs asynchronously."
   (let* ((remote-args (when remote (list "--remote" remote)))
          (args (append '("git" "push") selector-args remote-args))
          (preview (jj--git-push-preview args)))
@@ -287,8 +298,9 @@ pushing.  The push runs asynchronously."
 
 (defun jj--git-push-finish (selector-args remote status output)
   "Handle the exit STATUS and OUTPUT of a push of SELECTOR-ARGS to REMOTE.
-On success refresh the log.  If jj's safety checks ask for a fetch, offer
-to fetch and retry the push."
+
+On success refresh the log.  If jj's safety checks ask for a fetch,
+offer to fetch and retry the push."
   (cond
    ((eql 0 status)
     (message "%s" output)
@@ -312,6 +324,7 @@ to fetch and retry the push."
 ;;;###autoload
 (defun jj-git-push (&optional arg)
   "Push with `jj git push', using jj's default set of bookmarks.
+
 Preview the push and ask for confirmation first.  With prefix ARG, ask
 for the remote."
   (interactive "P")
@@ -320,6 +333,7 @@ for the remote."
 ;;;###autoload
 (defun jj-git-push-revision (&optional arg)
   "Push the bookmarks of the revision at point with `jj git push'.
+
 If the revision has no bookmarks, ask for a name for a new one.  Preview
 the push and ask for confirmation first.  With prefix ARG, ask for the
 remote."
@@ -337,6 +351,7 @@ remote."
 
 (defun jj-diff--fill (change-id &optional from)
   "Render the diff of CHANGE-ID into the current buffer.
+
 Show `jj diff --git -r CHANGE-ID', or `jj diff --git --from FROM --to
 CHANGE-ID' when FROM is non-nil.  Return the process exit status.  The
 output is uncolored so that `diff-mode' can font-lock it."
@@ -390,6 +405,7 @@ output is uncolored so that `diff-mode' can font-lock it."
 
 (defun jj-diff--show (change-id &optional from)
   "Show the diff of CHANGE-ID, optionally from FROM, in the diff buffer.
+
 See `jj-diff--fill'."
   (let ((buffer (get-buffer-create jj-diff-buffer-name)))
     (with-current-buffer buffer
@@ -409,6 +425,7 @@ See `jj-diff--fill'."
 
 (defun jj--read-revision (prompt)
   "Read a revision with PROMPT, completing over bookmarks and common revsets.
+
 Any revset may be entered.  The default is \"@-\"."
   (let ((revision (completing-read
                    (format-prompt prompt "@-")
@@ -421,7 +438,9 @@ Any revset may be entered.  The default is \"@-\"."
 ;;;###autoload
 (defun jj-diff-from (from)
   "Show `jj diff --git --from FROM --to REVISION' for the revision at point.
-Interactively, read FROM with completion over bookmarks and common revsets."
+
+Interactively, read FROM with completion over bookmarks and common
+revsets."
   (interactive
    (progn
      (unless (jj--revision-at-point)
@@ -433,6 +452,7 @@ Interactively, read FROM with completion over bookmarks and common revsets."
 
 (defun jj-diff-squash ()
   "Squash the revision shown in this `jj-diff-mode' buffer into its parent.
+
 Ask for confirmation first.  On success, kill the diff buffer."
   (interactive)
   (unless jj-diff--revision
@@ -448,6 +468,7 @@ Ask for confirmation first.  On success, kill the diff buffer."
 
 (defun jj--output (&rest args)
   "Return the uncolored standard output of `jj ARGS' in the repository root.
+
 Signal a `user-error' if the command fails."
   (let ((root (or (jj--root)
                   (user-error "Not inside a Jujutsu repository"))))
@@ -532,6 +553,7 @@ The description opens in a `jj-describe-mode' buffer; commit it with
 
 (defun jj-describe-commit ()
   "Set the description of the revision to the contents of this buffer.
+
 On success, kill the buffer."
   (interactive)
   (unless jj-describe--revision
@@ -632,11 +654,68 @@ overlay on each revision block."
     (jj-log--fill root buffer)
     (pop-to-buffer buffer)))
 
+(defun jj-log--capture-position ()
+  "Return the current position in this `jj-log-mode' buffer as a plist.
+
+The plist holds the change id of the revision at point, the numeric
+position of point, and the window start of each window showing the
+current buffer.  See `jj-log--restore-position'."
+  (list :change-id (when-let* ((overlay (jj--revision-overlay-at-point)))
+                     (jj--revision-change-id
+                      (overlay-get overlay 'jj--revision)))
+        :point (point)
+        :windows (mapcar (lambda (window)
+                           (cons window (window-start window)))
+                         (get-buffer-window-list nil nil 0))))
+
+(defun jj-log--restore-position (position)
+  "Restore the position in this `jj-log-mode' buffer from POSITION.
+
+POSITION is a plist captured by `jj-log--capture-position' before the
+buffer was re-rendered.  Point goes to the revision with the same change
+id as before, falling back to the previous numeric position when that
+revision is gone, and to `point-min' for a fresh buffer.  Windows that
+showed the buffer keep their point and, when the revision is gone, their
+start."
+  (let ((overlay
+         (when-let* ((change-id (plist-get position :change-id)))
+           (cl-find-if (lambda (overlay)
+                         (string= change-id
+                                  (jj--revision-change-id
+                                   (overlay-get overlay 'jj--revision))))
+                       (jj--revision-overlays)))))
+    (cond
+     (overlay (goto-char (overlay-start overlay)))
+     ((plist-get position :point)
+      (goto-char (min (plist-get position :point) (point-max))))
+     (t (goto-char (point-min))))
+    (dolist (pair (plist-get position :windows))
+      (when-let* ((window (car pair)))
+        (when (window-live-p window)
+          (set-window-point window (point))
+          (if overlay
+              ;; Keep the saved scroll unless the revision left the view.
+              (unless (and (>= (point) (window-start window))
+                           (< (point) (window-end window t)))
+                (with-selected-window window (recenter)))
+            (when (and (>= (cdr pair) (point-min))
+                       (<= (cdr pair) (point-max)))
+              (set-window-start window (cdr pair)))))))))
+
 (defun jj-log--fill (root buffer)
-  "Render `jj log' for the repository at ROOT into BUFFER."
+  "Render `jj log' for the repository at ROOT into BUFFER.
+
+When BUFFER already showed revisions, point is restored to the same
+revision; see `jj-log--capture-position'."
   (with-current-buffer buffer
-    (let ((inhibit-read-only t))
+    (let ((inhibit-read-only t)
+          (position (jj-log--capture-position)))
       (erase-buffer)
+      ;; `erase-buffer' leaves the old revision overlays behind as empty
+      ;; overlays at the start of the buffer; get rid of them so they do not
+      ;; pile up across refreshes.
+      (dolist (overlay (jj--revision-overlays))
+        (delete-overlay overlay))
       (jj-log-mode)
       (setq-local default-directory root)
       (let* ((coding-system-for-read 'utf-8)
@@ -644,9 +723,11 @@ overlay on each revision block."
                                "log" "-T" (jj--log-template))))
         (ansi-color-apply-on-region (point-min) (point-max))
         (if (eql 0 status)
-            (jj--log-finalize)
-          (message "jj log exited with status %s" status))
-        (goto-char (point-min))))))
+            (progn
+              (jj--log-finalize)
+              (jj-log--restore-position position))
+          (message "jj log exited with status %s" status)
+          (goto-char (point-min)))))))
 
 (defun jj--refresh-log (root)
   "Refresh the log buffer without displaying it, if it shows ROOT."
