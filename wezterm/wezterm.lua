@@ -9,5 +9,6 @@ end)
 
 config.font = wezterm.font 'JetBrains Mono'
 config.font_size = 14.0
+config.color_scheme = 'Dracula (Official)'
 
 return config

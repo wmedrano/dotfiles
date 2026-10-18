@@ -152,7 +152,9 @@
 
 (use-package jj
   :load-path "user-lisp/jj"
-  :commands (jj jj-log))
+  :commands (jj jj-log)
+  :bind
+  (("C-c j" . jj)))
 
 (use-package which-key
   :defer 2
