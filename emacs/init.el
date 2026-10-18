@@ -87,7 +87,9 @@
   (auto-save-default nil)
   (make-backup-files nil)
   (scroll-conservatively 101)
+  (indent-tabs-mode nil)
   :config
+  (add-hook 'before-save-hook #'delete-trailing-whitespace)
   (set-face-attribute 'default nil :family "JetBrains Mono" :height 140))
 
 (use-package custom
