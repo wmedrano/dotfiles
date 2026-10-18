@@ -8,7 +8,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window consult corfu diff-hl marginalia nerd-icons
+   '(ace-window consult corfu diff-hl dracula-theme marginalia nerd-icons
                 nerd-icons-completion orderless posframe vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
@@ -97,15 +97,15 @@
   (make-backup-files nil)
   (scroll-conservatively 101)
   (indent-tabs-mode nil)
+  (ring-bell-function #'ignore)
   :config
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
   (set-face-attribute 'default nil :family "JetBrains Mono" :height 140))
 
-(use-package custom
-  :custom
-  (custom-theme-directory (locate-user-emacs-file "user-lisp"))
+(use-package dracula-theme
+  :ensure t
   :config
-  (load-theme 'wezterm t))
+  (load-theme 'dracula t))
 
 (use-package rust-ts-mode
   :mode "\\.rs\\'"
