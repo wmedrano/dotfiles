@@ -180,7 +180,7 @@
 (use-package window
   :init
   (add-to-list 'display-buffer-alist
-               '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|Flymake diagnostics.*\\)\\*\\'"
+               '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|Flymake diagnostics.*\\|jj-log\\)\\*\\'"
                  (display-buffer-in-side-window)
                  (side . bottom)
                  (slot . 0)
