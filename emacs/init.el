@@ -188,6 +188,8 @@
 
 (use-package ace-window
   :ensure t
+  :custom
+  (aw-dispatch-always t)
   :bind ("M-o" . ace-window))
 
 (defun display-line-numbers-off ()
