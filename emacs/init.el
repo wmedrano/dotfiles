@@ -100,7 +100,7 @@
   (ring-bell-function #'ignore)
   :config
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
-  (set-face-attribute 'default nil :family "JetBrains Mono" :height 140))
+  (set-face-attribute 'default nil :family "JetBrains Mono" :height 120))
 
 (use-package dracula-theme
   :ensure t
