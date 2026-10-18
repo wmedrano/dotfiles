@@ -2,6 +2,7 @@
 /emacs/elpa/
 /emacs/eln-cache/
 /emacs/history
+/emacs/places.eld
 /emacs/projects.eld
 /emacs/tree-sitter/
 /emacs/user-lisp/**/*.elc
