@@ -21,6 +21,7 @@
 
 (use-package vertico
   :ensure t
+  :commands (vertico-mode)
   :init
   (vertico-mode))
 
@@ -32,11 +33,13 @@
 
 (use-package marginalia
   :ensure t
+  :defines marginalia-annotators
+  :commands (marginalia-mode)
+  :init
+  (marginalia-mode)
   :config
   (setq marginalia-annotators
-        (assq-delete-all 'project-file marginalia-annotators))
-  :init
-  (marginalia-mode))
+        (assq-delete-all 'project-file marginalia-annotators)))
 
 (use-package nerd-icons
   :ensure t)
@@ -44,6 +47,7 @@
 (use-package nerd-icons-completion
   :ensure t
   :after marginalia
+  :commands (nerd-icons-completion-mode)
   :hook (marginalia-mode . nerd-icons-completion-marginalia-setup)
   :init
   (nerd-icons-completion-mode))
@@ -69,6 +73,7 @@
 
 (use-package corfu
   :ensure t
+  :commands (global-corfu-mode)
   :custom
   (corfu-auto t)
   (corfu-cycle t)
@@ -122,15 +127,20 @@
 (use-package idle-gc-mode
   :defer 1
   :load-path "user-lisp"
+  :commands (idle-gc-mode)
   :init
   (idle-gc-mode))
 
+(use-package project)
+
 (use-package monorepo
   :load-path "user-lisp"
+  :after project
   :commands (monorepo-add-directory monorepo-remove-directory monorepo-find-file)
+  :functions (monorepo-project-try)
   :init
   (autoload 'monorepo-project-try "monorepo")
-  (add-hook 'project-find-functions #'monorepo-project-try))
+  (add-to-list 'project-find-functions #'monorepo-project-try))
 
 (use-package jj
   :load-path "user-lisp/jj"
@@ -150,6 +160,7 @@
 (use-package diff-hl
   :ensure t
   :hook (dired-mode . diff-hl-dired-mode)
+  :commands (global-diff-hl-mode diff-hl-flydiff-mode)
   :init
   (global-diff-hl-mode)
   (diff-hl-flydiff-mode))
@@ -163,7 +174,7 @@
   :bind ("M-o" . ace-window))
 
 (defun display-line-numbers-off ()
-  "Disable display-line-numbers in the current buffer."
+  "Disable `display-line-numbers' in the current buffer."
   (display-line-numbers-mode -1))
 
 (use-package display-line-numbers
