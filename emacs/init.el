@@ -111,18 +111,17 @@
   :mode "\\.ts\\'"
   :hook (typescript-ts-mode . eglot-ensure))
 
+(use-package toml-ts-mode
+  :mode "\\.toml\\'")
+
 (use-package cargo-minor-mode
   :load-path "user-lisp"
-  :hook rust-ts-mode)
+  :hook ((rust-ts-mode . cargo-minor-mode)
+         (toml-ts-mode . cargo-minor-mode-maybe-enable)))
 
 (use-package autorevert
   :init
   (global-auto-revert-mode))
-
-(use-package cargo-toml-ts-mode
-  :load-path "user-lisp"
-  :mode "/Cargo\\.toml\\'"
-  :hook cargo-minor-mode)
 
 (use-package idle-gc-mode
   :defer 1

@@ -1,4 +1,4 @@
-;;; cargo-minor-mode.el --- Cargo commands for Rust buffers -*- lexical-binding: t; -*-
+;;; cargo-minor-mode.el --- Cargo commands for Rust and Cargo.toml buffers -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -64,6 +64,13 @@
             (define-key map (kbd "C-c C-l") #'cargo-clippy)
             (define-key map (kbd "C-c C-t") #'cargo-test)
             map))
+
+;;;###autoload
+(defun cargo-minor-mode-maybe-enable ()
+  "Enable `cargo-minor-mode' if the current buffer visits a Cargo.toml."
+  (when (and buffer-file-name
+             (string= (file-name-nondirectory buffer-file-name) "Cargo.toml"))
+    (cargo-minor-mode)))
 
 (provide 'cargo-minor-mode)
 ;;; cargo-minor-mode.el ends here
