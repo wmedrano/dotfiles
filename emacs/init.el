@@ -229,4 +229,27 @@
   :init
   (global-display-line-numbers-mode))
 
+(use-package compile
+  :custom
+  (compilation-scroll-output 'first-error)
+  (compilation-context-lines 3)
+  :hook
+  (compilation-mode . display-line-numbers-off)
+  :bind
+  (("<f5>" . recompile)
+   ("M-g n" . next-error)
+   ("M-g p" . previous-error)))
+
+(use-package ansi-color
+  :after compile
+  :hook
+  (compilation-filter . ansi-color-compilation-filter))
+
+(use-package ansi-osc
+  :after compile
+  :custom
+  (ansi-osc-for-compilation-buffer t)
+  :hook
+  (compilation-filter . ansi-osc-compilation-filter))
+
 ;;; init.el ends here

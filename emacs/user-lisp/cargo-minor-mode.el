@@ -33,9 +33,9 @@
          (package (and manifest (cargo-minor-mode--package-name manifest)))
          (default-directory (file-name-directory root-manifest)))
     (compile (if package
-                 (format "cargo %s -p %s" subcommand
+                 (format "cargo %s --color=always -p %s" subcommand
                          (shell-quote-argument package))
-               (format "cargo %s" subcommand)))))
+               (format "cargo %s --color=always" subcommand)))))
 
 ;;;###autoload
 (defun cargo-check ()
