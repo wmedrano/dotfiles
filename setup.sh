@@ -25,3 +25,15 @@ link "$repo/wezterm" "$HOME/.config/wezterm"
 link "$repo/bash/bashrc" "$HOME/.bashrc"
 link "$repo/pi" "$HOME/.pi"
 link "$repo/git/ignore" "$HOME/.config/git/ignore"
+link "$repo/environment.d/node-extra-ca.conf" "$HOME/.config/environment.d/node-extra-ca.conf"
+
+install_dumile_ca() {
+    local crt="$repo/certs/dumile-local-root.crt"
+    if openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt "$crt" >/dev/null 2>&1; then
+        echo "ok: dumile.local CA trusted"
+    else
+        sudo trust anchor "$crt"
+        echo "installed: dumile.local CA"
+    fi
+}
+install_dumile_ca

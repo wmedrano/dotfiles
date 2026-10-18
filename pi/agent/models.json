@@ -1,0 +1,37 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "dumile": {
+      "name": "Dumile (local)",
+      "baseUrl": "https://dumile.local/v1",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "qwen-flash-next",
+          "name": "Qwen Flash Next",
+          "reasoning": true,
+          "thinkingLevelMap": {
+            "off": "none",
+            "minimal": null,
+            "low": "low",
+            "medium": "medium",
+            "high": "xhigh",
+            "xhigh": null,
+            "max": null
+          },
+          "input": [
+            "text"
+          ],
+          "contextWindow": 262144,
+          "maxTokens": 65536,
+          "cost": {
+            "input": 0.15,
+            "output": 0.47,
+            "cacheRead": 0.016,
+            "cacheWrite": 0.2
+          }
+        }
+      ]
+    }
+  }
+}
