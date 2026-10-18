@@ -163,7 +163,10 @@
   (which-key-mode))
 
 (use-package flymake
-  :hook (emacs-lisp-mode . flymake-mode))
+  :hook (emacs-lisp-mode . flymake-mode)
+  :bind
+  (("M-g d" . flymake-show-buffer-diagnostics)
+   ("M-g D" . flymake-show-project-diagnostics)))
 
 (use-package diff-hl
   :ensure t
@@ -180,18 +183,20 @@
 (use-package window
   :init
   (add-to-list 'display-buffer-alist
-               '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|Flymake diagnostics.*\\|jj-log\\)\\*\\'"
-                 (display-buffer-in-side-window)
+               '((derived-mode . (compilation-mode
+                                  flymake-diagnostics-buffer-mode
+                                  flymake-project-diagnostics-mode))
+                 (display-buffer-reuse-window
+                  display-buffer-in-side-window)
                  (side . bottom)
                  (slot . 0)
                  (window-height . 0.2)))
   (add-to-list 'display-buffer-alist
-               '((derived-mode . compilation-mode)
-                 (display-buffer-reuse-window
-                  display-buffer-in-side-window)
+               '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|jj-log\\)\\*\\'"
+                 (display-buffer-in-side-window)
                  (side . bottom)
                  (slot . 1)
-                 (window-height . 0.3))))
+                 (window-height . 0.2))))
 
 (use-package posframe
   :ensure t
@@ -225,7 +230,9 @@
 (use-package display-line-numbers
   :custom
   (display-line-numbers-width 3)
-  :hook (diff-mode . display-line-numbers-off)
+  :hook ((diff-mode . display-line-numbers-off)
+         (jj-log-mode . display-line-numbers-off)
+         (help-mode . display-line-numbers-off))
   :init
   (global-display-line-numbers-mode))
 
