@@ -9,7 +9,7 @@
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
    '(ace-window consult corfu diff-hl marginalia nerd-icons
-                nerd-icons-completion orderless vertico)))
+                nerd-icons-completion orderless posframe vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -186,11 +186,30 @@
                  (slot . 0)
                  (window-height . 0.2))))
 
+(use-package posframe
+  :ensure t
+  :functions (posframe-workable-p))
+
 (use-package ace-window
   :ensure t
   :custom
   (aw-dispatch-always t)
+  :custom-face
+  (aw-leading-char-face
+   ((t (:foreground "#ff3030"
+        :background "#151515"
+        :height 6.0
+        :weight ultra-bold
+        :family "JetBrains Mono"
+        :box (:line-width 3 :color "white")))))
   :bind ("M-o" . ace-window))
+
+(use-package ace-window-posframe
+  :after ace-window
+  :functions (ace-window-posframe-mode)
+  :config
+  (when (posframe-workable-p)
+    (ace-window-posframe-mode 1)))
 
 (defun display-line-numbers-off ()
   "Disable `display-line-numbers' in the current buffer."
