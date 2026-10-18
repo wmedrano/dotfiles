@@ -14,7 +14,7 @@
  '(package-selected-packages
    '(ace-window consult corfu diff-hl dracula-theme marginalia
                 markdown-ts-mode nerd-icons nerd-icons-completion
-                orderless posframe vertico))
+                orderless posframe shell-maker vertico))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -104,7 +104,14 @@
   (display-line-numbers-width 3)
   :hook ((diff-mode . display-line-numbers-off)
          (jj-log-mode . display-line-numbers-off)
-         (help-mode . display-line-numbers-off))
+         (help-mode . display-line-numbers-off)
+         (gent-shell-mode . display-line-numbers-off)
+         (dired-mode . display-line-numbers-off)
+         (xref--xref-buffer-mode . display-line-numbers-off)
+         (flymake-diagnostics-buffer-mode . display-line-numbers-off)
+         (flymake-project-diagnostics-mode . display-line-numbers-off)
+         (messages-buffer-mode . display-line-numbers-off)
+         (profiler-report-mode . display-line-numbers-off))
   :init
   (global-display-line-numbers-mode))
 
@@ -345,5 +352,51 @@
 (use-package markdown-ts-mode
   :ensure t
   :defer t)
+
+(use-package shell-maker
+  :ensure t)
+
+(use-package gent
+  :load-path "user-lisp/gent"
+  :after shell-maker
+  :commands (gent)
+  :functions (gent-llm-make-backend gent-llm-make-provider)
+  :defines (gent-llm-default-backend)
+  :preface
+  (defun pi-api-key (provider)
+    "Return the API key for PROVIDER, a symbol, from the pi agent's auth file."
+    (with-temp-buffer
+      (insert-file-contents "~/.pi/agent/auth.json")
+      (alist-get 'key (alist-get provider (json-parse-buffer :object-type 'alist)))))
+  (defvar gent-backends nil
+    "Alist of (NAME . BACKEND) that `set-gent-backend' chooses from.")
+  (defun set-gent-backend (name)
+    "Set `gent-llm-default-backend' to the backend NAME in `gent-backends'."
+    (interactive
+     (progn
+       (require 'gent)
+       (list (completing-read "Backend: " gent-backends nil t))))
+    (setq gent-llm-default-backend (alist-get name gent-backends nil nil #'equal))
+    (message "gent: using %s" name))
+  :config
+  (setq gent-backends
+        `(("dumile/qwen-flash-next"
+           . ,(gent-llm-make-backend
+               :provider (gent-llm-make-provider
+                          :name "dumile"
+                          :url-base "https://dumile.local/v1"
+                          :api-key (lambda () (pi-api-key 'dumile)))
+               :model "qwen-flash-next"))
+          ("opencodego/deepseek-v4.1-flash"
+           . ,(gent-llm-make-backend
+               :provider (gent-llm-make-provider
+                          :name "opencodego"
+                          :url-base "https://opencode.ai/inference/go/v1"
+                          :api-key (lambda () (pi-api-key 'opencode-go))
+                          ;; Opencode Go rejects requests without a session id.
+                          :headers (list (format "x-opencode-session: %s"
+                                                 (md5 (format "%s%s" (random) (current-time))))))
+               :model "deepseek-v4.1-flash"))))
+  (set-gent-backend "opencodego/deepseek-v4.1-flash"))
 
 ;;; init.el ends here
