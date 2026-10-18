@@ -115,6 +115,24 @@
   :mode "\\.ts\\'"
   :hook (typescript-ts-mode . eglot-ensure))
 
+(use-package eglot
+  :preface
+  (defun eglot-inlay-hints-off ()
+    "Disable Eglot inlay hints in the current buffer."
+    (eglot-inlay-hints-mode -1))
+  :hook (eglot-managed-mode . eglot-inlay-hints-off)
+  :commands (eglot-inlay-hints-mode)
+  :bind
+  (:prefix "C-c e"
+   :prefix-map eglot-prefix-map
+   ("r" . eglot-rename)
+   ("t" . eglot-momentary-inlay-hints)
+   ("f" . flymake-show-buffer-diagnostics)
+   ("F" . flymake-show-project-diagnostics)
+   ("a" . eglot-code-actions)
+   ("d" . xref-find-definitions)
+   ("x" . xref-find-references)))
+
 (use-package eglot-extras
   :load-path "user-lisp"
   :commands (eglot-format-on-save-mode)
@@ -180,7 +198,12 @@
 
 (use-package eldoc
   :custom
+  (eldoc-echo-area-prefer-doc-buffer t)
   (eldoc-minor-mode-string nil))
+
+(use-package eldoc-extra
+  :load-path "user-lisp"
+  :bind ("<f1>" . eldoc-extra-toggle-buffer))
 
 (use-package window
   :bind ("M-o" . other-window)
