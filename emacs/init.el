@@ -9,7 +9,8 @@
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
    '(ace-window consult corfu diff-hl dracula-theme marginalia nerd-icons
-                nerd-icons-completion orderless posframe vertico)))
+                nerd-icons-completion orderless posframe shell-maker
+                vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -173,6 +174,14 @@
   :commands (jj jj-log)
   :bind
   (("C-c j" . jj)))
+
+(use-package shell-maker
+  :ensure t)
+
+(use-package valet
+  :load-path "user-lisp/valet"
+  :after shell-maker
+  :commands (valet))
 
 (use-package which-key
   :defer 2
