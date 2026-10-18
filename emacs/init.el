@@ -168,6 +168,15 @@
   :custom
   (eldoc-minor-mode-string nil))
 
+(use-package window
+  :init
+  (add-to-list 'display-buffer-alist
+               '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|Flymake diagnostics.*\\)\\*\\'"
+                 (display-buffer-in-side-window)
+                 (side . bottom)
+                 (slot . 0)
+                 (window-height . 0.2))))
+
 (use-package ace-window
   :ensure t
   :bind ("M-o" . ace-window))
