@@ -3,6 +3,11 @@
   "deviceId": "d508a2af-0f92-4b3f-89fe-97444f2d3801",
   "defaultProvider": "dumile",
   "defaultModel": "qwen-flash-next",
+  "modelThinkingLevels": {
+    "dumile/qwen-flash-next": "medium",
+    "opencode-go/deepseek-v4.1-flash": "medium",
+    "openai/gpt-6.1-sol": "high"
+  },
   "enabledModels": [
     "dumile/qwen-flash-next",
     "opencode-go/deepseek-v4.1-flash",
