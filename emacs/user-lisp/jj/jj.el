@@ -338,6 +338,8 @@ output is uncolored so that `diff-mode' can font-lock it."
                    (user-error "Not inside a Jujutsu repository")))
          (root (file-name-as-directory root))
          (inhibit-read-only t))
+    (dolist (overlay (jj--revision-overlays))
+      (delete-overlay overlay))
     (erase-buffer)
     ;; Set the buffer-local outside any `let' binding of `default-directory',
     ;; otherwise `setq-local' would write the dynamic binding instead.
@@ -355,6 +357,10 @@ output is uncolored so that `diff-mode' can font-lock it."
                                  ;; `--color=never' overrides any `--color' in
                                  ;; `jj-arguments'; `diff-mode' supplies the colors.
                                  '("--color=never")))))
+      (when (eql 0 status)
+        (overlay-put (make-overlay (point-min) (point-max))
+                     'jj--revision
+                     (jj--make-revision :change-id change-id)))
       (font-lock-ensure)
       (goto-char (point-min))
       status)))
