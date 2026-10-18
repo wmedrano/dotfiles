@@ -184,7 +184,14 @@
                  (display-buffer-in-side-window)
                  (side . bottom)
                  (slot . 0)
-                 (window-height . 0.2))))
+                 (window-height . 0.2)))
+  (add-to-list 'display-buffer-alist
+               '((derived-mode . compilation-mode)
+                 (display-buffer-reuse-window
+                  display-buffer-in-side-window)
+                 (side . bottom)
+                 (slot . 1)
+                 (window-height . 0.3))))
 
 (use-package posframe
   :ensure t
