@@ -161,6 +161,13 @@
                  (slot . 0)
                  (window-height . 0.2)))
   (add-to-list 'display-buffer-alist
+               '("\\`\\*build-cleaner\\*\\'"
+                 (display-buffer-reuse-window
+                  display-buffer-in-side-window)
+                 (side . bottom)
+                 (slot . 0)
+                 (window-height . 0.2)))
+  (add-to-list 'display-buffer-alist
                '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|jj-log\\)\\*\\'"
                  (display-buffer-in-side-window)
                  (side . bottom)
