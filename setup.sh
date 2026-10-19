@@ -23,9 +23,7 @@ link() {
 link "$repo/emacs" "$HOME/.emacs.d"
 link "$repo/wezterm" "$HOME/.config/wezterm"
 link "$repo/bash/bashrc" "$HOME/.bashrc"
-link "$repo/pi" "$HOME/.pi"
 link "$repo/git/ignore" "$HOME/.config/git/ignore"
-link "$repo/environment.d/node-extra-ca.conf" "$HOME/.config/environment.d/node-extra-ca.conf"
 
 install_dumile_ca() {
     local crt="$repo/certs/dumile-local-root.crt"
@@ -36,4 +34,13 @@ install_dumile_ca() {
         echo "installed: dumile.local CA"
     fi
 }
-install_dumile_ca
+
+domain="${DOMAIN:-$(hostname -d 2>/dev/null || true)}"
+host="${HOSTNAME:-$(hostname 2>/dev/null || true)}"
+if [[ "${domain,,}" == *.com || "${host,,}" == *.com ]]; then
+    echo "skip: .pi and certificate setup (*.com host)"
+else
+    link "$repo/pi" "$HOME/.pi"
+    link "$repo/environment.d/node-extra-ca.conf" "$HOME/.config/environment.d/node-extra-ca.conf"
+    install_dumile_ca
+fi
