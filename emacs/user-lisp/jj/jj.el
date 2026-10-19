@@ -328,13 +328,16 @@ for the remote."
 (defvar-local jj-diff--from nil
   "Revision the current `jj-diff-mode' buffer diffs from, or nil for its parent.")
 
-(defun jj-diff--fill (change-id &optional from)
+(defun jj-diff--fill (directory change-id &optional from)
   "Render the diff of CHANGE-ID into the current buffer.
+
+DIRECTORY is the working directory for the jj repo or nil to use
+`default-directory'.
 
 Show `jj diff --git -r CHANGE-ID', or `jj diff --git --from FROM --to
 CHANGE-ID' when FROM is non-nil.  Return the process exit status.  The
 output is uncolored so that `diff-mode' can font-lock it."
-  (let* ((root (or (jj--root)
+  (let* ((root (or (jj--root directory)
                    (user-error "Not inside a Jujutsu repository")))
          (root (file-name-as-directory root))
          (inhibit-read-only t))
@@ -368,7 +371,7 @@ output is uncolored so that `diff-mode' can font-lock it."
 (defun jj-diff--refresh ()
   "Re-render the diff buffer for `jj-diff--revision'."
   (interactive)
-  (jj-diff--fill jj-diff--revision jj-diff--from))
+  (jj-diff--fill nil jj-diff--revision jj-diff--from))
 
 (defvar jj-diff-mode-map
   (let ((map (make-sparse-keymap)))
@@ -392,10 +395,11 @@ output is uncolored so that `diff-mode' can font-lock it."
   "Show the diff of CHANGE-ID, optionally from FROM, in the diff buffer.
 
 See `jj-diff--fill'."
-  (let ((buffer (get-buffer-create jj-diff-buffer-name)))
+  (let ((dir    default-directory)
+        (buffer (get-buffer-create jj-diff-buffer-name)))
     (with-current-buffer buffer
       (jj-diff-mode)
-      (let ((status (jj-diff--fill change-id from)))
+      (let ((status (jj-diff--fill dir change-id from)))
         (unless (eql 0 status)
           (message "jj diff exited with status %s" status))))
     (pop-to-buffer buffer)))
