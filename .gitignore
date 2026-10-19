@@ -3,7 +3,9 @@
 /emacs/eln-cache/
 /emacs/history
 /emacs/places.eld
+/emacs/places
 /emacs/projects.eld
+/emacs/projects
 /emacs/tree-sitter/
 /emacs/user-lisp/**/*.elc
 /emacs/user-lisp/.user-lisp-autoloads.el

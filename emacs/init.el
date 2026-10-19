@@ -14,7 +14,9 @@
  '(package-selected-packages
    '(ace-window consult corfu diff-hl dracula-theme marginalia
                 markdown-ts-mode nerd-icons nerd-icons-completion
-                orderless posframe vertico)))
+                orderless posframe vertico))
+ '(safe-local-variable-values
+   '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
