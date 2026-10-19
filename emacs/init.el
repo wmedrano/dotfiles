@@ -106,7 +106,13 @@
 (use-package dracula-theme
   :ensure t
   :config
-  (load-theme 'dracula t))
+  (load-theme 'dracula t)
+  (set-face-attribute 'line-number-current-line nil
+                      :inherit 'line-number
+                      :weight 'bold
+                      :slant 'normal
+                      :foreground "#f1fa8c"
+                      :background "#44475a"))
 
 (use-package rust-ts-mode
   :mode "\\.rs\\'"
