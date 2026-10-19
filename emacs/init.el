@@ -2,6 +2,10 @@
 ;;; Commentary:
 ;;; Code:
 
+;;; ----------------------------------------------------------------------------
+;;; 1. Early Startup & Performance
+;;; ----------------------------------------------------------------------------
+
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -24,78 +28,16 @@
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 
-(use-package vertico
-  :ensure t
-  :commands (vertico-mode)
-  :init
-  (vertico-mode))
-
-(use-package orderless
-  :ensure t
-  :custom
-  (completion-styles '(orderless basic))
-  (completion-category-overrides '((file (styles basic partial-completion)))))
-
-(use-package marginalia
-  :ensure t
-  :defines marginalia-annotators
-  :commands (marginalia-mode)
-  :init
-  (marginalia-mode)
-  :config
-  (setq marginalia-annotators
-        (assq-delete-all 'project-file marginalia-annotators)))
-
-(use-package nerd-icons
-  :ensure t)
-
-(use-package nerd-icons-completion
-  :ensure t
-  :after marginalia
-  :commands (nerd-icons-completion-mode)
-  :hook (marginalia-mode . nerd-icons-completion-marginalia-setup)
-  :init
-  (nerd-icons-completion-mode))
-
-(use-package savehist
-  :init
-  (savehist-mode))
-
-(use-package consult
+(use-package idle-gc-mode
   :defer 1
-  :ensure t
-  :bind
-  (("C-x b" . consult-buffer)
-   ("C-x 4 b" . consult-buffer-other-window)
-   ("C-x p b" . consult-project-buffer)
-   ("C-x r b" . consult-bookmark)
-   ("M-y" . consult-yank-pop)
-   ("M-g g" . consult-goto-line)
-   ("M-g M-g" . consult-goto-line)
-   ("M-g i" . consult-imenu)
-   ("M-s l" . consult-line)
-   ("M-s r" . consult-ripgrep)))
-
-(defun recenter-if-near-edge ()
-  "Recenter the window if point is within 10 lines of the top or bottom edge."
-  (interactive)
-  (let ((line (count-screen-lines (window-start) (point))))
-    (when (or (< line 10)
-              (> line (- (window-body-height) 10)))
-      (recenter))))
-
-(use-package isearch
-  :custom
-  (isearch-allow-scroll t))
-
-(use-package corfu
-  :ensure t
-  :commands (global-corfu-mode)
-  :custom
-  (corfu-auto t)
-  (corfu-cycle t)
+  :load-path "user-lisp"
+  :commands (idle-gc-mode)
   :init
-  (global-corfu-mode))
+  (idle-gc-mode))
+
+;;; ----------------------------------------------------------------------------
+;;; 2. Core Editor & Defaults
+;;; ----------------------------------------------------------------------------
 
 (use-package emacs
   :custom
@@ -117,6 +59,26 @@
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
   (set-face-attribute 'default nil :family "JetBrains Mono" :height 120))
 
+(use-package autorevert
+  :init
+  (global-auto-revert-mode))
+
+(use-package which-key
+  :defer 2
+  :custom
+  (which-key-lighter "")
+  (which-key-idle-delay 0.2)
+  :init
+  (which-key-mode))
+
+(use-package isearch
+  :custom
+  (isearch-allow-scroll t))
+
+;;; ----------------------------------------------------------------------------
+;;; 3. Visuals & UI
+;;; ----------------------------------------------------------------------------
+
 (use-package dracula-theme
   :ensure t
   :config
@@ -128,107 +90,25 @@
                       :foreground "#f1fa8c"
                       :background "#44475a"))
 
-(use-package rust-ts-mode
-  :mode "\\.rs\\'"
-  :hook (rust-ts-mode . eglot-ensure))
+(use-package nerd-icons
+  :ensure t)
 
-(use-package typescript-ts-mode
-  :mode "\\.ts\\'"
-  :hook (typescript-ts-mode . eglot-ensure))
+(defun display-line-numbers-off ()
+  "Disable `display-line-numbers' in the current buffer."
+  (display-line-numbers-mode -1))
 
-(use-package eglot
-  :preface
-  (defun eglot-inlay-hints-off ()
-    "Disable Eglot inlay hints in the current buffer."
-    (eglot-inlay-hints-mode -1))
-  :hook (eglot-managed-mode . eglot-inlay-hints-off)
-  :commands (eglot-inlay-hints-mode)
-  :bind
-  (:prefix "C-c e"
-   :prefix-map eglot-prefix-map
-   ("r" . eglot-rename)
-   ("t" . eglot-momentary-inlay-hints)
-   ("f" . flymake-show-buffer-diagnostics)
-   ("F" . flymake-show-project-diagnostics)
-   ("a" . eglot-code-actions)
-   ("d" . xref-find-definitions)
-   ("x" . xref-find-references)))
-
-(use-package eglot-extras
-  :load-path "user-lisp"
-  :commands (eglot-format-on-save-mode)
-  :hook ((rust-ts-mode typescript-ts-mode) . eglot-format-on-save-mode))
-
-(use-package toml-ts-mode
-  :mode "\\.toml\\'")
-
-(use-package cargo-minor-mode
-  :load-path "user-lisp"
-  :hook ((rust-ts-mode . cargo-minor-mode)
-         (toml-ts-mode . cargo-minor-mode-maybe-enable)))
-
-(use-package autorevert
-  :init
-  (global-auto-revert-mode))
-
-(use-package idle-gc-mode
-  :defer 1
-  :load-path "user-lisp"
-  :commands (idle-gc-mode)
-  :init
-  (idle-gc-mode))
-
-(use-package project)
-
-(use-package monorepo
-  :load-path "user-lisp"
-  :after project
-  :commands (monorepo-add-directory monorepo-remove-directory monorepo-find-file)
-  :functions (monorepo-project-try)
-  :init
-  (autoload 'monorepo-project-try "monorepo")
-  (add-to-list 'project-find-functions #'monorepo-project-try))
-
-(use-package jj
-  :load-path "user-lisp/jj"
-  :commands (jj jj-log)
-  :bind
-  (("C-c j" . jj)))
-
-(use-package markdown-ts-mode
-  :ensure t
-  :defer t)
-
-(use-package which-key
-  :defer 2
+(use-package display-line-numbers
   :custom
-  (which-key-lighter "")
-  (which-key-idle-delay 0.2)
+  (display-line-numbers-width 3)
+  :hook ((diff-mode . display-line-numbers-off)
+         (jj-log-mode . display-line-numbers-off)
+         (help-mode . display-line-numbers-off))
   :init
-  (which-key-mode))
+  (global-display-line-numbers-mode))
 
-(use-package flymake
-  :hook (emacs-lisp-mode . flymake-mode)
-  :bind
-  (("M-g d" . flymake-show-buffer-diagnostics)
-   ("M-g D" . flymake-show-project-diagnostics)))
-
-(use-package diff-hl
-  :ensure t
-  :hook (dired-mode . diff-hl-dired-mode)
-  :commands (global-diff-hl-mode diff-hl-flydiff-mode)
-  :init
-  (global-diff-hl-mode)
-  (diff-hl-flydiff-mode))
-
-(use-package eldoc
-  :custom
-  (eldoc-echo-area-prefer-doc-buffer t)
-  (eldoc-minor-mode-string nil))
-
-(use-package eldoc-extra
-  :load-path "user-lisp"
-  :bind ("<f1>" . eldoc-extra-toggle-buffer))
+;;; ----------------------------------------------------------------------------
+;;; 4. Window Management & Navigation
+;;; ----------------------------------------------------------------------------
 
 (use-package window
   :bind ("M-o" . other-window)
@@ -274,24 +154,106 @@
   (when (posframe-workable-p)
     (ace-window-posframe-mode 1)))
 
-(defun display-line-numbers-off ()
-  "Disable `display-line-numbers' in the current buffer."
-  (display-line-numbers-mode -1))
+;;; ----------------------------------------------------------------------------
+;;; 5. Completion Ecosystem
+;;; ----------------------------------------------------------------------------
 
-(use-package display-line-numbers
-  :custom
-  (display-line-numbers-width 3)
-  :hook ((diff-mode . display-line-numbers-off)
-         (jj-log-mode . display-line-numbers-off)
-         (help-mode . display-line-numbers-off))
+(use-package savehist
   :init
-  (global-display-line-numbers-mode))
+  (savehist-mode))
+
+(use-package vertico
+  :ensure t
+  :commands (vertico-mode)
+  :init
+  (vertico-mode))
+
+(use-package orderless
+  :ensure t
+  :custom
+  (completion-styles '(orderless basic))
+  (completion-category-overrides '((file (styles basic partial-completion)))))
+
+(use-package marginalia
+  :ensure t
+  :defines marginalia-annotators
+  :commands (marginalia-mode)
+  :init
+  (marginalia-mode)
+  :config
+  (setq marginalia-annotators
+        (assq-delete-all 'project-file marginalia-annotators)))
+
+(use-package nerd-icons-completion
+  :ensure t
+  :after marginalia
+  :commands (nerd-icons-completion-mode)
+  :hook (marginalia-mode . nerd-icons-completion-marginalia-setup)
+  :init
+  (nerd-icons-completion-mode))
+
+(use-package consult
+  :defer 1
+  :ensure t
+  :bind
+  (("C-x b" . consult-buffer)
+   ("C-x 4 b" . consult-buffer-other-window)
+   ("C-x p b" . consult-project-buffer)
+   ("C-x r b" . consult-bookmark)
+   ("M-y" . consult-yank-pop)
+   ("M-g g" . consult-goto-line)
+   ("M-g M-g" . consult-goto-line)
+   ("M-g i" . consult-imenu)
+   ("M-s l" . consult-line)
+   ("M-s r" . consult-ripgrep)))
+
+(use-package corfu
+  :ensure t
+  :commands (global-corfu-mode)
+  :custom
+  (corfu-auto t)
+  (corfu-cycle t)
+  :init
+  (global-corfu-mode))
+
+;;; ----------------------------------------------------------------------------
+;;; 6. Project Management & Version Control
+;;; ----------------------------------------------------------------------------
+
+(use-package project)
+
+(use-package monorepo
+  :load-path "user-lisp"
+  :after project
+  :commands (monorepo-add-directory monorepo-remove-directory monorepo-find-file)
+  :functions (monorepo-project-try)
+  :init
+  (autoload 'monorepo-project-try "monorepo")
+  (add-to-list 'project-find-functions #'monorepo-project-try))
+
+(use-package jj
+  :load-path "user-lisp/jj"
+  :commands (jj jj-log)
+  :bind
+  (("C-c j" . jj)))
+
+(use-package diff-hl
+  :ensure t
+  :hook (dired-mode . diff-hl-dired-mode)
+  :commands (global-diff-hl-mode diff-hl-flydiff-mode)
+  :init
+  (global-diff-hl-mode)
+  (diff-hl-flydiff-mode))
 
 (use-package diff-mode
   :bind
   (:map diff-mode-map
         ("RET" . diff-goto-source)
         ("M-o" . nil)))
+
+;;; ----------------------------------------------------------------------------
+;;; 7. Development & IDE Tooling
+;;; ----------------------------------------------------------------------------
 
 (use-package compile
   :custom
@@ -315,5 +277,67 @@
   (ansi-osc-for-compilation-buffer t)
   :hook
   (compilation-filter . ansi-osc-compilation-filter))
+
+(use-package flymake
+  :hook (emacs-lisp-mode . flymake-mode)
+  :bind
+  (("M-g d" . flymake-show-buffer-diagnostics)
+   ("M-g D" . flymake-show-project-diagnostics)))
+
+(use-package eldoc
+  :custom
+  (eldoc-echo-area-prefer-doc-buffer t)
+  (eldoc-minor-mode-string nil))
+
+(use-package eldoc-extra
+  :load-path "user-lisp"
+  :bind ("<f1>" . eldoc-extra-toggle-buffer))
+
+(use-package eglot
+  :preface
+  (defun eglot-inlay-hints-off ()
+    "Disable Eglot inlay hints in the current buffer."
+    (eglot-inlay-hints-mode -1))
+  :hook (eglot-managed-mode . eglot-inlay-hints-off)
+  :commands (eglot-inlay-hints-mode)
+  :bind
+  (:prefix "C-c e"
+   :prefix-map eglot-prefix-map
+   ("r" . eglot-rename)
+   ("t" . eglot-momentary-inlay-hints)
+   ("f" . flymake-show-buffer-diagnostics)
+   ("F" . flymake-show-project-diagnostics)
+   ("a" . eglot-code-actions)
+   ("d" . xref-find-definitions)
+   ("x" . xref-find-references)))
+
+(use-package eglot-extras
+  :load-path "user-lisp"
+  :commands (eglot-format-on-save-mode)
+  :hook ((rust-ts-mode typescript-ts-mode) . eglot-format-on-save-mode))
+
+;;; ----------------------------------------------------------------------------
+;;; 8. Major Modes & Tools
+;;; ----------------------------------------------------------------------------
+
+(use-package rust-ts-mode
+  :mode "\\.rs\\'"
+  :hook (rust-ts-mode . eglot-ensure))
+
+(use-package typescript-ts-mode
+  :mode "\\.ts\\'"
+  :hook (typescript-ts-mode . eglot-ensure))
+
+(use-package toml-ts-mode
+  :mode "\\.toml\\'")
+
+(use-package cargo-minor-mode
+  :load-path "user-lisp"
+  :hook ((rust-ts-mode . cargo-minor-mode)
+         (toml-ts-mode . cargo-minor-mode-maybe-enable)))
+
+(use-package markdown-ts-mode
+  :ensure t
+  :defer t)
 
 ;;; init.el ends here
