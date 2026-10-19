@@ -75,6 +75,18 @@
    ("M-s l" . consult-line)
    ("M-s r" . consult-ripgrep)))
 
+(defun recenter-if-near-edge ()
+  "Recenter the window if point is within 10 lines of the top or bottom edge."
+  (interactive)
+  (let ((line (count-screen-lines (window-start) (point))))
+    (when (or (< line 10)
+              (> line (- (window-body-height) 10)))
+      (recenter))))
+
+(use-package isearch
+  :custom
+  (isearch-allow-scroll t))
+
 (use-package corfu
   :ensure t
   :commands (global-corfu-mode)
@@ -97,6 +109,7 @@
   (auto-save-default nil)
   (make-backup-files nil)
   (scroll-conservatively 101)
+  (scroll-margin 8)
   (indent-tabs-mode nil)
   (ring-bell-function #'ignore)
   :config
