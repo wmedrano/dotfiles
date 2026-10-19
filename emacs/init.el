@@ -224,6 +224,10 @@
 
 (use-package project)
 
+(use-package file-extra
+  :load-path "user-lisp"
+  :commands (copy-filename copy-filename-absolute))
+
 (use-package monorepo
   :load-path "user-lisp"
   :after project
