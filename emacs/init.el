@@ -14,7 +14,8 @@
  '(package-selected-packages
    '(ace-window auto-highlight-symbol company consult corfu diff-hl dracula-theme
                 eglot marginalia markdown-ts-mode nerd-icons
-                nerd-icons-completion orderless posframe rust-mode vertico vundo))
+                nerd-icons-completion orderless posframe rg rust-mode ttx-mode
+                vertico vundo))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -357,6 +358,10 @@
   :mode "\\.rs\\'"
   :hook ((rust-ts-mode . eglot-ensure)
          ((rust-ts-mode rust-mode) . set-fill-column-100)))
+
+(use-package rust-mode
+  :ensure t
+  :after rust-ts-mode)
 
 (use-package typescript-ts-mode
   :mode "\\.ts\\'"
