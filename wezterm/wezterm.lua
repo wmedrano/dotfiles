@@ -11,4 +11,11 @@ config.font = wezterm.font 'JetBrains Mono'
 config.font_size = 14.0
 config.color_scheme = 'Dracula (Official)'
 
+-- Make text like "cr/8604710" clickable as a Chromium Gerrit link.
+config.hyperlink_rules = wezterm.default_hyperlink_rules()
+table.insert(config.hyperlink_rules, {
+  regex = [[\bcr/(\d+)\b]],
+  format = 'https://chromium-review.googlesource.com/c/chromium/src/+/$1',
+})
+
 return config
