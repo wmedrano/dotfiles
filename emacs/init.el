@@ -172,7 +172,7 @@
                  (slot . 0)
                  (window-height . 0.2)))
   (add-to-list 'display-buffer-alist
-               '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|jj-log\\)\\*\\'"
+               '("\\`\\*\\(xref\\|Help\\|eldoc.*\\|jj-log\\|Warnings\\)\\*\\'"
                  (display-buffer-in-side-window)
                  (side . bottom)
                  (slot . 1)
