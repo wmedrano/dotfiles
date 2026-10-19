@@ -89,6 +89,7 @@
   (tool-bar-mode nil)
   (menu-bar-mode nil)
   (scroll-bar-mode nil)
+  (blink-cursor-mode nil)
   (use-short-answers t)
   (initial-frame-alist '((fullscreen . maximized)))
   (default-frame-alist '((fullscreen . maximized)))
