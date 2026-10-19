@@ -8,8 +8,9 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window consult corfu diff-hl dracula-theme marginalia nerd-icons
-                nerd-icons-completion orderless posframe vertico)))
+   '(ace-window consult corfu diff-hl dracula-theme marginalia
+                markdown-ts-mode nerd-icons nerd-icons-completion
+                orderless posframe vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -193,6 +194,10 @@
   :commands (jj jj-log)
   :bind
   (("C-c j" . jj)))
+
+(use-package markdown-ts-mode
+  :ensure t
+  :defer t)
 
 (use-package which-key
   :defer 2
