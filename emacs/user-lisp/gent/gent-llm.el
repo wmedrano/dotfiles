@@ -46,7 +46,6 @@
 
 (require 'cl-lib)
 (require 'cl-generic)
-(require 'json)
 (require 'map)
 (require 'subr-x)
 
@@ -108,14 +107,9 @@ Reuse this ID for every request in the same conversation."
 
 (defun gent-llm--json-parse-string (string)
   "Parse STRING as JSON, decoding null as nil and returning nil on failure."
-  (if (fboundp 'json-parse-string)
-      (condition-case nil
-          (json-parse-string string :object-type 'alist :null-object nil)
-        (error nil))
-    (condition-case nil
-        (let ((json-null nil))
-          (json-read-from-string string))
-      (error nil))))
+  (condition-case nil
+      (json-parse-string string :object-type 'alist :null-object nil)
+    (json-error nil)))
 
 (defun gent-llm--normalize-message (message)
   "Return MESSAGE as a clean, tool-aware alist.

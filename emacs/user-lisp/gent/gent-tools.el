@@ -200,16 +200,8 @@ Signal an error when it is not a JSON object."
       (skip-chars-forward " \t\r\n")
       (unless (eq (char-after) ?\{)
         (error "Arguments are not a JSON object: %s" arguments))
-      (let ((parsed
-             (if (fboundp 'json-parse-buffer)
-                 (json-parse-buffer :object-type 'alist :array-type 'array
-                                    :null-object nil :false-object :false)
-               (let ((json-object-type 'alist)
-                     (json-array-type 'vector)
-                     (json-key-type 'symbol)
-                     (json-null nil)
-                     (json-false :false))
-                 (json-read)))))
+      (let ((parsed (json-parse-buffer :object-type 'alist :null-object nil
+                                       :false-object :false)))
         (skip-chars-forward " \t\r\n")
         (unless (eobp)
           (error "Unexpected text after argument object"))

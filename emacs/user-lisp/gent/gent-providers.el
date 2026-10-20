@@ -11,7 +11,6 @@
 
 (require 'cl-lib)
 (require 'cl-generic)
-(require 'json)
 (require 'map)
 (require 'subr-x)
 (require 'gent-llm)
@@ -152,10 +151,17 @@ fragments are concatenated."
   "Return ACC vector as a list of clean OpenAI-shaped tool calls."
   (delq nil (append acc nil)))
 
+(defun gent-openai--error-message (error)
+  "Return a readable message for the streamed ERROR object."
+  (or (and (consp error) (stringp (map-elt error 'message)) (map-elt error 'message))
+      (and (stringp error) error)
+      (format "%S" error)))
+
 (defun gent-openai--filter (state)
   "Parse streamed SSE output in STATE.
 Return an alist of ((:filtered . TEXT) (:reasoning . REASONING)
-\(:pending . PARTIAL-LINE) (:tool-calls . ACC) (:finish-reason . REASON))."
+\(:pending . PARTIAL-LINE) (:tool-calls . ACC) (:finish-reason . REASON)
+\(:error . MESSAGE)).  MESSAGE is the first error the server streamed."
   (let* ((raw (concat (or (map-elt state :pending) "") ""))
          (complete (string-suffix-p "\n" raw))
          (lines (split-string raw "\n"))
@@ -165,6 +171,7 @@ Return an alist of ((:filtered . TEXT) (:reasoning . REASONING)
          (lines (if pending (butlast lines) lines))
          (tool-calls (or (map-elt state :tool-calls) []))
          (finish-reason (map-elt state :finish-reason))
+         (error (map-elt state :error))
          (text "")
          (reasoning ""))
     (dolist (line lines)
@@ -180,6 +187,8 @@ Return an alist of ((:filtered . TEXT) (:reasoning . REASONING)
                    (reason (and delta (map-elt delta 'reasoning_content)))
                    (calls (and delta (map-elt delta 'tool_calls)))
                    (stop (and choice (map-elt choice 'finish_reason))))
+              (when (and obj (map-elt obj 'error) (not error))
+                (setq error (gent-openai--error-message (map-elt obj 'error))))
               (when stop
                 (setq finish-reason stop))
               (when content
@@ -193,16 +202,15 @@ Return an alist of ((:filtered . TEXT) (:reasoning . REASONING)
       (:reasoning . ,reasoning)
       (:pending . ,(and pending (not (string-empty-p pending)) pending))
       (:tool-calls . ,tool-calls)
-      (:finish-reason . ,finish-reason))))
+      (:finish-reason . ,finish-reason)
+      (:error . ,error))))
 
 (defun gent-openai--write-payload (payload)
   "Write PAYLOAD as JSON to a new temporary file and return its name."
   (let ((file (make-temp-file "gent-llm-" nil ".json")))
     (let ((coding-system-for-write 'utf-8))
       (with-temp-file file
-        (insert (if (fboundp 'json-serialize)
-                    (json-serialize payload :false-object :json-false)
-                  (json-encode payload)))))
+        (insert (json-serialize payload :false-object :json-false))))
     file))
 
 (defun gent-openai--curl-config (headers)
@@ -231,15 +239,18 @@ All arguments and the returned process follow `gent-llm-chat'."
          (full "")
          (tool-calls [])
          (finish-reason nil)
+         (stream-error nil)
          (parse (lambda (text)
                   (let ((result (gent-openai--filter
                                  `((:pending . ,text)
                                    (:tool-calls . ,tool-calls)
-                                   (:finish-reason . ,finish-reason)))))
+                                   (:finish-reason . ,finish-reason)
+                                   (:error . ,stream-error)))))
                     (setq pending (map-elt result :pending))
                     (setq tool-calls (map-elt result :tool-calls))
                     (setq finish-reason (or (map-elt result :finish-reason)
                                             finish-reason))
+                    (setq stream-error (map-elt result :error))
                     (let ((reasoning (map-elt result :reasoning)))
                       (when (and on-reasoning (not (string-empty-p reasoning)))
                         (funcall on-reasoning reasoning)))
@@ -270,6 +281,9 @@ All arguments and the returned process follow `gent-llm-chat'."
                  (funcall parse (concat pending "\n")))
                (pcase (process-status process)
                  ('signal nil)
+                 ((guard (and stream-error (zerop (process-exit-status process))))
+                  (when on-error
+                    (funcall on-error (format "gent-llm: server error: %s" stream-error))))
                  ((guard (zerop (process-exit-status process)))
                   (let ((calls (gent-openai--tool-calls tool-calls)))
                     (when (and on-tool-calls calls)
