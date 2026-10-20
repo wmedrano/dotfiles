@@ -356,8 +356,9 @@
 (use-package gent
   :load-path "user-lisp/gent"
   :commands (gent)
-  :functions (gent-llm-make-dumile-backend gent-llm-make-opencode-go-backend)
-  :defines (gent-backends gent-llm-default-backend)
+  :functions (gent-llm-make-dumile-backend gent-llm-make-opencode-go-backend
+              gent-tools-names)
+  :defines (gent-backends gent-llm-default-backend gent-tools-trusted)
   :preface
   (defun pi-api-key (provider)
     "Return the API key for PROVIDER, a symbol, from the pi agent's auth file."
@@ -374,6 +375,7 @@
     (message "gent: using %s" name))
   :config
   (require 'gent-providers)
+  (setq gent-tools-trusted (gent-tools-names))
   (setq gent-backends
         `(("dumile/qwen-flash-next"
            . ,(gent-llm-make-dumile-backend
