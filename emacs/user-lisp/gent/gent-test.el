@@ -367,6 +367,168 @@ Approval requests go to `gent-test--confirm'."
 
 ;;; Tools
 
+(ert-deftest gent-test-tool-args-schema ()
+  (let ((gent-tools--registry nil))
+    (should (equal
+             (gent-define-tool
+              "example"
+              :args '((text :type string :description "Input text")
+                      (count :type integer :optional t :default 2)
+                      (enabled :type boolean :optional t :default :false))
+              :handler #'ignore)
+             "example"))
+    (let* ((tool (gent-tools-get "example"))
+           (schema (gent-tool-parameters tool))
+           (properties (map-elt schema 'properties))
+           (wire (gent-tools--parse-arguments (json-encode schema))))
+      (should (equal (map-elt schema 'type) "object"))
+      (should (equal (map-elt schema 'required) ["text"]))
+      (should (equal (map-elt (map-elt properties 'text) 'description) "Input text"))
+      (should (equal (map-elt (map-elt properties 'count) 'type) "integer"))
+      (should (= (map-elt (map-elt properties 'count) 'default) 2))
+      (should (eq (map-elt wire 'additionalProperties) :false))
+      (should (eq (map-elt (map-elt (map-elt wire 'properties) 'enabled) 'default)
+                  :false)))
+    ;; Re-registering replaces the definition, including its declarations.
+    (gent-define-tool "example" :args nil :handler #'ignore)
+    (should (equal (gent-tools-names) '("example")))
+    (let ((schema (gent-tool-parameters (gent-tools-get "example"))))
+      (should (equal (map-elt schema 'required) []))
+      (should (hash-table-p (map-elt schema 'properties)))
+      (should (string-match-p "\"properties\":{}" (json-encode schema))))))
+
+(ert-deftest gent-test-tool-args-invalid-declarations ()
+  (let ((gent-tools--registry nil))
+    (gent-define-tool "example" :handler #'ignore)
+    (let ((original (gent-tools-get "example")))
+      (dolist (args '(bad [text] (("text" :type string)) ((:text :type string))
+                      ((nil :type string)) ((t :type string))
+                      ((text)) ((text :type object)) ((text :type array))
+                      ((text :type "string")) ((text :type string :description 1))
+                      ((text :type string :optional yes))
+                      ((text :type string :default "required"))
+                      ((text :type integer :optional t :default "wrong"))
+                      ((text :type boolean :optional t :default nil))
+                      ((text :type string :enum ("one" "two")))
+                      ((text :type string :type integer))
+                      ((text :type string :optional))
+                      ((text :type string) (text :type integer))
+                      ((text :type string) . bad)))
+        (should-error (gent-define-tool "example" :args args :handler #'ignore))
+        (should (eq (gent-tools-get "example") original))))
+    (should-error (gent-define-tool "legacy" :parameters '((type . "object"))
+                                   :handler #'ignore))))
+
+(ert-deftest gent-test-tool-args-defaults-and-preview ()
+  (let ((gent-tools--registry nil)
+        preview-args handler-args result)
+    (gent-define-tool
+     "example"
+     :args '((text :type string)
+             (count :type integer :optional t :default 2)
+             (enabled :type boolean :optional t :default :false)
+             (other :type string :optional t))
+     :preview (lambda (args)
+                (setq preview-args args)
+                (cons 'command "example"))
+     :handler (lambda (args done)
+                (setq handler-args args)
+                (funcall done "ok")))
+    (let ((input '((text . "") (count . 0) (enabled . t))))
+      (gent-tools-call "example" input default-directory
+                       (lambda (value) (setq result value))
+                       (gent-test--answering t))
+      (should (equal result "ok"))
+      (should (eq preview-args handler-args))
+      (should (equal handler-args input))
+      (should-not (eq handler-args input)))
+    (gent-tools-call "example" "{\"text\":\"hello\"}" default-directory
+                     (lambda (value) (setq result value))
+                     (gent-test--answering t))
+    (should (equal handler-args '((text . "hello") (count . 2) (enabled . :false))))
+    (should-not (assq 'other handler-args))))
+
+(ert-deftest gent-test-tool-args-types-and-validation ()
+  (let ((gent-tools--registry nil)
+        (effects 0)
+        received result)
+    (dolist (case '((string "\"hello\"" "hello")
+                    (integer "0" 0)
+                    (number "1.5" 1.5)
+                    (number "2" 2)
+                    (boolean "true" t)
+                    (boolean "false" :false)))
+      (gent-define-tool
+       "example" :args `((value :type ,(car case)))
+       :preview (lambda (_args) (cl-incf effects) nil)
+       :handler (lambda (args done)
+                  (cl-incf effects)
+                  (setq received (map-elt args 'value))
+                  (funcall done "ok")))
+      (gent-tools-call "example" (format "{\"value\":%s}" (cadr case))
+                       default-directory (lambda (value) (setq result value)))
+      (should (equal result "ok"))
+      (should (equal received (nth 2 case)))
+      (setq effects 0)
+      (dolist (input '("{}" "{\"value\":null}" "{\"value\":[]}"
+                       "{\"value\":{}}" "{\"value\":true,\"extra\":1}"))
+        (gent-tools-call "example" input default-directory
+                         (lambda (value) (setq result value)))
+        (should (string-prefix-p "Error:" result))
+        (should (zerop effects))))
+    ;; A non-integer number must not pass integer validation.
+    (gent-define-tool "example" :args '((value :type integer))
+                      :handler (lambda (_args _done) (cl-incf effects)))
+    (gent-tools-call "example" "{\"value\":1.5}" default-directory
+                     (lambda (value) (setq result value)))
+    (should (string-prefix-p "Error:" result))
+    (should (zerop effects))))
+
+(ert-deftest gent-test-tool-args-json-readers ()
+  (let ((gent-tools--registry nil)
+        received result)
+    (gent-define-tool
+     "example"
+     :args '((enabled :type boolean :optional t :default t))
+     :handler (lambda (args done)
+                (setq received args)
+                (funcall done "ok")))
+    (gent-define-tool "empty" :handler (lambda (args done)
+                                        (should-not args)
+                                        (funcall done "empty")))
+    (dolist (parser (list (symbol-function 'json-parse-buffer) nil))
+      (cl-letf (((symbol-function 'json-parse-buffer) parser))
+        (dolist (input '("{}" " \n{\"enabled\":false}\t"))
+          (gent-tools-call "example" input default-directory
+                           (lambda (value) (setq result value)))
+          (should (equal result "ok"))
+          (should (equal received (if (equal input "{}")
+                                     '((enabled . t)) '((enabled . :false))))))
+        (gent-tools-call "empty" "{}" default-directory
+                         (lambda (value) (setq result value)))
+        (should (equal result "empty"))
+        (dolist (input '("null" "false" "[]" "[{}]" "\"text\"" "1" ""
+                         " " "{bad}" "{} trailing" "{} {}"))
+          (gent-tools-call "example" input default-directory
+                           (lambda (value) (setq result value)))
+          (should (string-prefix-p "Error:" result)))))))
+
+(ert-deftest gent-test-tool-args-async-completion ()
+  (let ((gent-tools--registry nil)
+        complete results)
+    (gent-define-tool
+     "example" :args '((text :type string))
+     :handler (lambda (args done)
+                ;; Retain completion just as a process sentinel would.
+                (setq complete (lambda () (funcall done (map-elt args 'text))))
+                "ignored return value"))
+    (gent-tools-call "example" "{\"text\":\"later\"}" default-directory
+                     (lambda (value) (push value results)))
+    (should-not results)
+    (funcall complete)
+    (funcall complete)
+    (should (equal results '("later")))))
+
 (ert-deftest gent-test-truncate ()
   (should (equal (gent-tools-truncate "short" 10) "short"))
   (let ((cut (gent-tools-truncate (make-string 100 ?a) 20)))
@@ -896,7 +1058,8 @@ completion."
                                  (gent-llm--normalize-messages
                                   (plist-get sent :messages) nil)))
                   (should (equal (map-elt payload 'tools)
-                                 (vconcat (plist-get sent :tools))))
+                                 (gent-llm--json-parse-string
+                                  (json-encode (vconcat (plist-get sent :tools))))))
                   (should (equal (map-elt payload 'model) "preview-model"))
                   (should (= (map-elt payload 'max_tokens) 123))
                   (should (= (map-elt payload 'temperature) 0.5))

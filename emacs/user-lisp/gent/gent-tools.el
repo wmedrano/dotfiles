@@ -5,8 +5,16 @@
 ;; A small tool registry plus the tools gent exposes to the model:
 ;; `read_file', `edit_file', `write_file' and `run_shell'.
 ;;
-;; Every tool has a name, a description, a JSON schema for its
-;; parameters and a handler.  Handlers are called as (HANDLER ARGS DONE)
+;; Every tool has a name, a description, argument declarations and a
+;; handler.  gent generates the JSON schema from `:args', for example:
+;;
+;; (gent-define-tool "uppercase"
+;;   :description "Convert text to uppercase."
+;;   :args '((text :type string :description "Text to convert"))
+;;   :handler (lambda (args done)
+;;              (funcall done (upcase (map-elt args 'text)))))
+;;
+;; Handlers are called as (HANDLER ARGS DONE)
 ;; with `default-directory' bound to the project root; they must call
 ;; DONE exactly once with the result string.  Handlers may signal an
 ;; error instead, which is reported back to the model as the result.
@@ -43,17 +51,12 @@
   :type 'integer
   :group 'gent-tools)
 
-(defcustom gent-tools-shell-timeout 120
-  "Default timeout, in seconds, for `run_shell' commands."
-  :type 'number
-  :group 'gent-tools)
-
 (defvar-local gent-tools-session-trusted nil
   "Tool names trusted for the current session only.")
 
 (cl-defstruct (gent-tool (:constructor gent-tool--create))
   "A tool the model can call."
-  name description parameters handler preview)
+  name description args parameters handler preview)
 
 (defvar gent-tools--registry nil
   "Alist of (NAME . `gent-tool'), in definition order.")
@@ -61,18 +64,95 @@
 (defvar gent-tools--processes nil
   "Live processes started by tools, killed by `gent-tools-kill-processes'.")
 
-(cl-defun gent-define-tool (name &key description parameters handler preview)
+(defun gent-tools--argument-type-p (value type)
+  "Return non-nil when VALUE matches the argument TYPE."
+  (pcase type
+    ('string (stringp value))
+    ('integer (integerp value))
+    ('number (numberp value))
+    ('boolean (memq value '(t :false)))))
+
+(defun gent-tools--parameters (args)
+  "Validate argument declarations ARGS and return their JSON schema."
+  (unless (proper-list-p args)
+    (error "Tool :args must be a list of argument declarations"))
+  (let (properties required names)
+    (dolist (arg args)
+      (unless (and (consp arg) (proper-list-p arg)
+                   (car arg) (symbolp (car arg)) (not (keywordp (car arg)))
+                   (not (eq (car arg) t)))
+        (error "Invalid argument declaration: %S" arg))
+      (let ((name (car arg))
+            (options (cdr arg))
+            keys)
+        (when (memq name names)
+          (error "Duplicate argument declaration: %s" name))
+        (push name names)
+        (unless (zerop (% (length options) 2))
+          (error "Argument %s must have a property list" name))
+        (cl-loop for (key _value) on options by #'cddr do
+                 (unless (memq key '(:type :description :optional :default))
+                   (error "Unknown option %S for argument %s" key name))
+                 (when (memq key keys)
+                   (error "Duplicate option %S for argument %s" key name))
+                 (push key keys))
+        (let ((type (plist-get options :type))
+              (optional (plist-get options :optional)))
+          (unless (memq type '(string integer number boolean))
+            (error "Unsupported type %S for argument %s" type name))
+          (unless (memq optional '(nil t))
+            (error "Argument %s :optional must be t or nil" name))
+          (when (and (plist-member options :description)
+                     (not (stringp (plist-get options :description))))
+            (error "Argument %s :description must be a string" name))
+          (when (plist-member options :default)
+            (unless optional
+              (error "Only optional arguments may have defaults: %s" name))
+            (unless (gent-tools--argument-type-p (plist-get options :default) type)
+              (error "Default for argument %s must have type %s" name type)))
+          (let ((schema `((type . ,(symbol-name type)))))
+            (when (plist-member options :description)
+              (setq schema (append schema
+                                   `((description . ,(plist-get options :description))))))
+            (when (plist-member options :default)
+              ;; `json-encode' uses :json-false, while handlers use :false.
+              (let ((value (plist-get options :default)))
+                (setq schema (append schema
+                                     `((default . ,(if (eq value :false)
+                                                       :json-false value)))))))
+            (push (cons name schema) properties))
+          (unless optional
+            (push (symbol-name name) required)))))
+    `((type . "object")
+      (properties . ,(if properties (nreverse properties)
+                       (make-hash-table :test #'equal)))
+      (required . ,(vconcat (nreverse required)))
+      (additionalProperties . :json-false))))
+
+(cl-defun gent-define-tool (name &key description args handler preview)
   "Register the tool NAME.
-DESCRIPTION and PARAMETERS (a JSON-schema alist) are sent to the
-model.  HANDLER is called with (ARGS DONE) and must call DONE with a
-result string.  PREVIEW, when non-nil, is called with ARGS and returns
-\(KIND . TEXT) describing the change so the user can confirm it."
-  (setf (alist-get name gent-tools--registry nil nil #'equal)
-        (gent-tool--create :name name
-                           :description description
-                           :parameters parameters
-                           :handler handler
-                           :preview preview))
+DESCRIPTION and a JSON schema generated from ARGS are sent to the model.
+ARGS is a list of (NAME :type TYPE :description TEXT :optional BOOL
+:default VALUE) declarations.  TYPE is string, integer, number or boolean;
+boolean values are t and :false.  Descriptions are optional.  Arguments
+are required unless :optional t; only optional arguments may have literal,
+type-checked defaults.  Defaults apply only to absent arguments.  Omit
+ARGS for a tool without arguments.  Unknown arguments are rejected.
+
+HANDLER is called with (ARGS DONE), where ARGS is a symbol-keyed alist
+of validated values, and must call DONE exactly once with a result string,
+immediately or asynchronously.  Its return value is ignored.  PREVIEW,
+when non-nil, is called with the same ARGS and returns (KIND . TEXT)
+describing the change so the user can confirm it."
+  (let* ((args (copy-tree args))
+         (parameters (gent-tools--parameters args)))
+    (setf (alist-get name gent-tools--registry nil nil #'equal)
+          (gent-tool--create :name name
+                             :description description
+                             :args args
+                             :parameters parameters
+                             :handler handler
+                             :preview preview)))
   name)
 
 (defun gent-tools-get (name)
@@ -110,13 +190,57 @@ MAX defaults to `gent-tools-output-max-chars'."
 (defun gent-tools--parse-arguments (arguments)
   "Parse ARGUMENTS, a JSON string or alist, into an alist.
 Signal an error when it is not a JSON object."
-  (cond ((null arguments) nil)
-        ((listp arguments) arguments)
-        ((string-empty-p (string-trim arguments)) nil)
-        (t (let ((parsed (gent-llm--json-parse-string arguments)))
-             (unless (and parsed (listp parsed))
-               (error "Arguments are not a JSON object: %s" arguments))
-             parsed))))
+  (if (listp arguments)
+      arguments
+    (unless (stringp arguments)
+      (error "Arguments must be a JSON object or alist"))
+    (with-temp-buffer
+      (insert arguments)
+      (goto-char (point-min))
+      (skip-chars-forward " \t\r\n")
+      (unless (eq (char-after) ?\{)
+        (error "Arguments are not a JSON object: %s" arguments))
+      (let ((parsed
+             (if (fboundp 'json-parse-buffer)
+                 (json-parse-buffer :object-type 'alist :array-type 'array
+                                    :null-object nil :false-object :false)
+               (let ((json-object-type 'alist)
+                     (json-array-type 'vector)
+                     (json-key-type 'symbol)
+                     (json-null nil)
+                     (json-false :false))
+                 (json-read)))))
+        (skip-chars-forward " \t\r\n")
+        (unless (eobp)
+          (error "Unexpected text after argument object"))
+        parsed))))
+
+(defun gent-tools--prepare-arguments (tool args)
+  "Validate ARGS for TOOL and return an alist with absent defaults filled in."
+  (unless (proper-list-p args)
+    (error "Arguments must be an alist"))
+  (let ((declarations (gent-tool-args tool))
+        (result (copy-alist args))
+        seen)
+    (dolist (entry args)
+      (unless (and (consp entry) (assq (car entry) declarations))
+        (error "Unknown or invalid argument: %S" entry))
+      (when (memq (car entry) seen)
+        (error "Duplicate argument: %s" (car entry)))
+      (push (car entry) seen))
+    (dolist (arg declarations)
+      (let* ((name (car arg))
+             (options (cdr arg))
+             (entry (assq name args)))
+        (cond
+         (entry
+          (unless (gent-tools--argument-type-p (cdr entry) (plist-get options :type))
+            (error "Argument `%s' must have type %s" name (plist-get options :type))))
+         ((not (plist-get options :optional))
+          (error "Missing required argument `%s'" name))
+         ((plist-member options :default)
+          (setq result (append result (list (cons name (plist-get options :default)))))))))
+    result))
 
 (defun gent-tools--trusted-p (name)
   "Return non-nil if tool NAME may run without confirmation."
@@ -196,7 +320,8 @@ again with the new one.  Without CONFIRM, such calls are rejected."
           (if (not tool)
               (funcall finish (format "Error: unknown tool `%s'.  Available tools: %s"
                                       name (string-join (gent-tools-names) ", ")))
-            (run (gent-tools--parse-arguments arguments)))
+            (run (gent-tools--prepare-arguments
+                  tool (gent-tools--parse-arguments arguments))))
         (error (funcall finish (format "Error: %s" (error-message-string err))))))))
 
 (defun gent-tools-kill-processes ()
@@ -332,15 +457,9 @@ Signal an error unless OLD occurs exactly once."
  :description "Read a text file in the project.  Each line is prefixed with its \
 line number and a tab; the prefix is not part of the file.  Use `offset' and \
 `limit' to read part of a large file.  A directory path lists its entries."
- :parameters '((type . "object")
-               (properties
-                . ((path . ((type . "string")
-                            (description . "Path relative to the project root")))
-                   (offset . ((type . "integer")
-                              (description . "1-based line to start at")))
-                   (limit . ((type . "integer")
-                             (description . "Maximum number of lines to return")))))
-               (required . ["path"]))
+ :args '((path :type string :description "Path relative to the project root")
+         (offset :type integer :description "1-based line to start at" :optional t)
+         (limit :type integer :description "Maximum number of lines to return" :optional t))
  :handler #'gent-tools--read-file)
 
 ;;; edit_file
@@ -362,15 +481,9 @@ line number and a tab; the prefix is not part of the file.  Use `offset' and \
 in a file.  `old_string' must match the file exactly, including whitespace, and \
 must be unique; include surrounding lines to make it unique.  Read the file \
 before editing it."
- :parameters '((type . "object")
-               (properties
-                . ((path . ((type . "string")
-                            (description . "Path relative to the project root")))
-                   (old_string . ((type . "string")
-                                  (description . "Exact text to replace")))
-                   (new_string . ((type . "string")
-                                  (description . "Replacement text")))))
-               (required . ["path" "old_string" "new_string"]))
+ :args '((path :type string :description "Path relative to the project root")
+         (old_string :type string :description "Exact text to replace")
+         (new_string :type string :description "Replacement text"))
  :preview (lambda (args)
             (pcase-let ((`(,file ,old ,new) (gent-tools--edit-new-content args)))
               (cons 'diff (gent-tools--diff file old new))))
@@ -385,13 +498,8 @@ before editing it."
  "write_file"
  :description "Create a file, or overwrite an existing one, with `content'.  \
 Prefer edit_file for changes to existing files."
- :parameters '((type . "object")
-               (properties
-                . ((path . ((type . "string")
-                            (description . "Path relative to the project root")))
-                   (content . ((type . "string")
-                               (description . "The complete new file contents")))))
-               (required . ["path" "content"]))
+ :args '((path :type string :description "Path relative to the project root")
+         (content :type string :description "The complete new file contents"))
  :preview (lambda (args)
             (let ((file (gent-tools--resolve (map-elt args 'path))))
               (gent-tools--check-buffer file)
@@ -413,7 +521,7 @@ Prefer edit_file for changes to existing files."
 (defun gent-tools--run-shell (args done)
   "Run the command in ARGS asynchronously and call DONE with its output."
   (let* ((command (map-elt args 'command))
-         (timeout (or (map-elt args 'timeout) gent-tools-shell-timeout))
+         (timeout (map-elt args 'timeout))
          (buffer (generate-new-buffer " *gent-shell*"))
          (timed-out nil)
          (timer nil)
@@ -460,13 +568,9 @@ Prefer edit_file for changes to existing files."
 stdout and stderr plus the exit code.  Use it to list files (ls, find), search \
 (rg, grep), build and run tests.  Commands get no stdin and must not be \
 interactive."
- :parameters '((type . "object")
-               (properties
-                . ((command . ((type . "string")
-                               (description . "The shell command to run")))
-                   (timeout . ((type . "integer")
-                               (description . "Timeout in seconds")))))
-               (required . ["command"]))
+ :args '((command :type string :description "The shell command to run")
+         (timeout :type number :description "Timeout in seconds (default: 120)"
+                  :optional t :default 120))
  :preview (lambda (args)
             (cons 'command (format "$ %s\n\n(in %s)"
                                    (map-elt args 'command) default-directory)))

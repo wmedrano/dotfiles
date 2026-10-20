@@ -201,7 +201,7 @@ Return an alist of ((:filtered . TEXT) (:reasoning . REASONING)
     (let ((coding-system-for-write 'utf-8))
       (with-temp-file file
         (insert (if (fboundp 'json-serialize)
-                    (json-serialize payload)
+                    (json-serialize payload :false-object :json-false)
                   (json-encode payload)))))
     file))
 
