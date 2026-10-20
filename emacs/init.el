@@ -356,16 +356,14 @@
 (use-package gent
   :load-path "user-lisp/gent"
   :commands (gent)
-  :functions (gent-llm-make-backend gent-llm-make-provider)
-  :defines (gent-llm-default-backend)
+  :functions (gent-llm-make-dumile-backend gent-llm-make-opencode-go-backend)
+  :defines (gent-backends gent-llm-default-backend)
   :preface
   (defun pi-api-key (provider)
     "Return the API key for PROVIDER, a symbol, from the pi agent's auth file."
     (with-temp-buffer
       (insert-file-contents "~/.pi/agent/auth.json")
       (alist-get 'key (alist-get provider (json-parse-buffer :object-type 'alist)))))
-  (defvar gent-backends nil
-    "Alist of (NAME . BACKEND) that `set-gent-backend' chooses from.")
   (defun set-gent-backend (name)
     "Set `gent-llm-default-backend' to the backend NAME in `gent-backends'."
     (interactive
@@ -375,23 +373,15 @@
     (setq gent-llm-default-backend (alist-get name gent-backends nil nil #'equal))
     (message "gent: using %s" name))
   :config
+  (require 'gent-providers)
   (setq gent-backends
         `(("dumile/qwen-flash-next"
-           . ,(gent-llm-make-backend
-               :provider (gent-llm-make-provider
-                          :name "dumile"
-                          :url-base "https://dumile.local/v1"
-                          :api-key (lambda () (pi-api-key 'dumile)))
+           . ,(gent-llm-make-dumile-backend
+               :api-key (lambda () (pi-api-key 'dumile))
                :model "qwen-flash-next"))
           ("opencodego/deepseek-v4.1-flash"
-           . ,(gent-llm-make-backend
-               :provider (gent-llm-make-provider
-                          :name "opencodego"
-                          :url-base "https://opencode.ai/inference/go/v1"
-                          :api-key (lambda () (pi-api-key 'opencode-go))
-                          ;; Opencode Go rejects requests without a session id.
-                          :headers (list (format "x-opencode-session: %s"
-                                                 (md5 (format "%s%s" (random) (current-time))))))
+           . ,(gent-llm-make-opencode-go-backend
+               :api-key (lambda () (pi-api-key 'opencode-go))
                :model "deepseek-v4.1-flash"))))
   (set-gent-backend "opencodego/deepseek-v4.1-flash"))
 

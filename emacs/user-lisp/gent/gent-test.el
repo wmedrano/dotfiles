@@ -2,17 +2,49 @@
 
 ;;; Commentary:
 
-;; Run from this directory with:
+;; Run from this directory by evaluating:
 ;;
-;;   emacs -Q --batch -L . \
-;;     -l gent-test.el -f ert-run-tests-batch-and-exit
+;;   (shell-command
+;;    "emacs -Q --batch -L . -l gent-test.el -f ert-run-tests-batch-and-exit")
 
 ;;; Code:
 
 (require 'ert)
 (require 'gent)
+(require 'gent-providers)
 
 ;;; Helpers
+
+(cl-defstruct (gent-test-backend (:include gent-llm-generic-backend))
+  "A backend with no dependency on the OpenAI implementation."
+  (model-id "original")
+  (effort "low")
+  request process)
+
+(cl-defmethod gent-llm-backend-chat ((backend gent-test-backend) &rest args)
+  "Record request ARGS on BACKEND and return its configured process."
+  (setf (gent-test-backend-request backend) args)
+  (gent-test-backend-process backend))
+
+(cl-defmethod gent-llm-copy-backend ((backend gent-test-backend))
+  "Return a copy of BACKEND whose settings can be changed independently."
+  (copy-gent-test-backend backend))
+
+(cl-defmethod gent-llm-backend-model ((backend gent-test-backend))
+  "Return the model ID used by BACKEND."
+  (gent-test-backend-model-id backend))
+
+(cl-defmethod (setf gent-llm-backend-model) (model (backend gent-test-backend))
+  "Set BACKEND's model ID to MODEL."
+  (setf (gent-test-backend-model-id backend) model))
+
+(cl-defmethod gent-llm-backend-reasoning-effort ((backend gent-test-backend))
+  "Return BACKEND's reasoning effort, or nil to omit it."
+  (gent-test-backend-effort backend))
+
+(cl-defmethod (setf gent-llm-backend-reasoning-effort) (effort (backend gent-test-backend))
+  "Set BACKEND's reasoning effort to EFFORT, or nil to omit it."
+  (setf (gent-test-backend-effort backend) effort))
 
 (defmacro gent-test--with-project (&rest body)
   "Run BODY with `default-directory' bound to a fresh temporary project."
@@ -58,23 +90,66 @@ Approval requests go to `gent-test--confirm'."
                      deltas "")
           "data: [DONE]\n\n"))
 
+;;; Generic dispatch
+
+(ert-deftest gent-test-generic-chat-dispatch ()
+  (let* ((process (make-pipe-process :name "gent-test-dispatch" :noquery t))
+         (explicit (make-gent-test-backend :process process))
+         (gent-llm-default-backend (make-gent-test-backend :process process))
+         (args (list :session-id "conversation-1"
+                     :messages '(((role . "system") (content . "system")))
+                     :prompt "hello"
+                     :tools (list (gent-llm-make-tool :name "f"))
+                     :tool-choice "auto"
+                     :on-token (lambda (_chunk))
+                     :on-reasoning (lambda (_chunk))
+                     :on-tool-calls (lambda (_calls _reason))
+                     :on-done (lambda (_text))
+                     :on-error (lambda (_message)))))
+    (unwind-protect
+        (progn
+          (should (gent-llm-generic-backend-p explicit))
+          (should-not (gent-openai-backend-p explicit))
+          (should (eq (apply #'gent-llm-chat :backend explicit args) process))
+          (should (equal (gent-test-backend-request explicit) args))
+          (should-not (gent-test-backend-request gent-llm-default-backend))
+          (should (eq (apply #'gent-llm-chat args) process))
+          (should (equal (gent-test-backend-request gent-llm-default-backend) args))
+          (setf (gent-test-backend-request gent-llm-default-backend) nil)
+          (should (eq (apply #'gent-llm-chat :backend nil args) process))
+          (should (equal (gent-test-backend-request gent-llm-default-backend) args)))
+      (delete-process process))))
+
+(ert-deftest gent-test-chat-no-backend ()
+  (let ((gent-llm-default-backend nil))
+    (should-error (gent-llm-chat :prompt "hello"))))
+
+(ert-deftest gent-test-chat-session-id ()
+  (let ((backend (make-gent-test-backend)))
+    (gent-llm-chat :backend backend :prompt "hello")
+    (should-not (plist-get (gent-test-backend-request backend) :session-id))
+    (setf (gent-test-backend-request backend) nil)
+    (dolist (id '("" 123 "session\nextra" "session\rextra"))
+      (should-error (gent-llm-chat :backend backend :session-id id)))
+    (should-not (gent-test-backend-request backend))))
+
 ;;; SSE parsing
 
 (ert-deftest gent-test-filter-text ()
-  (let ((result (gent-llm--filter
+  (let ((result (gent-openai--filter
                  `((:pending . ,(gent-test--sse '((content . "Hel"))
                                                 '((content . "lo"))))))))
     (should (equal (map-elt result :filtered) "Hello"))
     (should-not (map-elt result :pending))))
 
 (ert-deftest gent-test-filter-partial-line ()
-  (let ((result (gent-llm--filter
+  (let ((result (gent-openai--filter
                  '((:pending . "data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\ndata: {\"cho")))))
     (should (equal (map-elt result :filtered) "a"))
     (should (equal (map-elt result :pending) "data: {\"cho"))))
 
 (ert-deftest gent-test-filter-tool-calls ()
-  (let* ((result (gent-llm--filter
+  (let* ((result (gent-openai--filter
                   `((:pending
                      . ,(gent-test--sse
                          '((tool_calls . [((index . 0) (id . "c1")
@@ -82,7 +157,7 @@ Approval requests go to `gent-test--confirm'."
                                                         (arguments . "{\"pa"))))]))
                          '((tool_calls . [((index . 0)
                                            (function . ((arguments . "th\":\"x\"}"))))])))))))
-         (calls (gent-llm--tool-calls (map-elt result :tool-calls))))
+         (calls (gent-openai--tool-calls (map-elt result :tool-calls))))
     (should (= (length calls) 1))
     (should (equal (map-elt (car calls) 'id) "c1"))
     (should (equal (map-elt (map-elt (car calls) 'function) 'arguments)
@@ -90,7 +165,7 @@ Approval requests go to `gent-test--confirm'."
 
 ;; Reasoning arrives separately from the answer.
 (ert-deftest gent-test-filter-reasoning ()
-  (let ((result (gent-llm--filter
+  (let ((result (gent-openai--filter
                  `((:pending . ,(gent-test--sse '((reasoning_content . "Hmm, "))
                                                 '((reasoning_content . "ok."))
                                                 '((content . "42"))))))))
@@ -98,29 +173,107 @@ Approval requests go to `gent-test--confirm'."
     (should (equal (map-elt result :filtered) "42"))))
 
 (ert-deftest gent-test-payload-reasoning-effort ()
-  (let ((backend (gent-llm-make-backend :model "m" :reasoning-effort "low")))
-    (should (equal (map-elt (gent-llm--payload backend nil "hi" nil nil) 'reasoning_effort)
+  (let ((backend (gent-make-openai-backend :model "m" :reasoning-effort "low")))
+    (should (equal (map-elt (gent-openai--payload backend nil "hi" nil nil) 'reasoning_effort)
                    "low"))
-    (should (equal (map-elt (gent-llm--payload backend nil "hi" nil nil) 'model)
+    (should (equal (map-elt (gent-openai--payload backend nil "hi" nil nil) 'model)
                    "m")))
-  (let ((backend (gent-llm-make-backend :model "m" :reasoning-effort nil)))
-    (should-not (assq 'reasoning_effort (gent-llm--payload backend nil "hi" nil nil)))))
+  (let ((backend (gent-make-openai-backend :model "m" :reasoning-effort nil)))
+    (should-not (assq 'reasoning_effort (gent-openai--payload backend nil "hi" nil nil)))))
 
 (ert-deftest gent-test-backend-timeout ()
-  (let ((provider (gent-llm-make-provider :default-timeout 30)))
-    (should (= (gent-llm--timeout (gent-llm-make-backend :provider provider)) 30))
-    (should (= (gent-llm--timeout (gent-llm-make-backend :provider provider :timeout 5))
-               5))))
+  (should (= (gent-openai-backend-timeout (gent-make-openai-backend)) 600))
+  (should (= (gent-openai-backend-timeout (gent-make-openai-backend :timeout 5)) 5)))
 
-(ert-deftest gent-test-provider-headers ()
+(ert-deftest gent-test-backend-headers ()
   (should (member "Authorization: Bearer k"
-                  (gent-llm--headers (gent-llm-make-provider :api-key (lambda () "k")))))
+                  (gent-openai--headers (gent-make-openai-backend :api-key (lambda () "k")))))
   (should-not (seq-find (lambda (h) (string-prefix-p "Authorization" h))
-                        (gent-llm--headers (gent-llm-make-provider))))
-  (should (member "X-A: 1" (gent-llm--headers
-                            (gent-llm-make-provider :headers '("X-A: 1")))))
-  (should (member "X-B: 2" (gent-llm--headers
-                            (gent-llm-make-provider :headers (lambda () '("X-B: 2")))))))
+                        (gent-openai--headers (gent-make-openai-backend))))
+  (should (member "X-A: 1" (gent-openai--headers
+                            (gent-make-openai-backend :headers '("X-A: 1")))))
+  (should (member "X-B: 2" (gent-openai--headers
+                            (gent-make-openai-backend :headers (lambda () '("X-B: 2"))))))
+  (should (equal (gent-openai--headers
+                  (gent-make-openai-backend
+                   :session-id-header "X-Session"
+                   :headers (lambda () '("X-B: 2")))
+                  "conversation")
+                 '("Content-Type: application/json"
+                   "X-Session: conversation" "X-B: 2"))))
+
+(ert-deftest gent-test-backend-url ()
+  (should (equal (gent-openai--url (gent-make-openai-backend :url-base "https://x/v1/"))
+                 "https://x/v1/chat/completions"))
+  (should (equal (gent-openai--url (gent-make-openai-backend
+                                :url-base "https://x" :api-path "/custom"))
+                 "https://x/custom")))
+
+(ert-deftest gent-test-service-backends ()
+  (dolist (spec '((gent-llm-make-dumile-backend "dumile"
+                   "https://dumile.local/v1/chat/completions")
+                  (gent-llm-make-opencode-go-backend "opencodego"
+                   "https://opencode.ai/inference/go/v1/chat/completions")))
+    (let* ((key "first")
+           (reads 0)
+           (backend (funcall (car spec) :model "m"
+                             :api-key (lambda () (cl-incf reads) key))))
+      (should (gent-llm-generic-backend-p backend))
+      (should (gent-openai-backend-p backend))
+      (should (= reads 0))
+      (should (equal (gent-openai-backend-name backend) (nth 1 spec)))
+      (should (equal (gent-openai--url backend) (nth 2 spec)))
+      (should (= (gent-openai-backend-timeout backend) 600))
+      (let ((payload (gent-openai--payload backend nil "hi" nil nil)))
+        (should (equal (map-elt payload 'model) "m"))
+        (should (= (map-elt payload 'max_tokens) 4096))
+        (should (equal (map-elt payload 'reasoning_effort) "low"))
+        (should-not (assq 'temperature payload)))
+      (should (member "Authorization: Bearer first" (gent-openai--headers backend "session")))
+      (setq key "second")
+      (should (member "Authorization: Bearer second" (gent-openai--headers backend "session")))
+      (should (= reads 2)))
+    (let* ((backend (funcall (car spec) :model "custom" :api-key "k"
+                             :timeout 5 :max-tokens nil
+                             :temperature 0.5 :reasoning-effort nil))
+           (payload (gent-openai--payload backend nil "hi" nil nil)))
+      (should (= (gent-openai-backend-timeout backend) 5))
+      (should (equal (map-elt payload 'model) "custom"))
+      (should-not (assq 'max_tokens payload))
+      (should-not (assq 'reasoning_effort payload))
+      (should (= (map-elt payload 'temperature) 0.5))
+      (should (member "Authorization: Bearer k" (gent-openai--headers backend "session"))))))
+
+(ert-deftest gent-test-opencode-go-session ()
+  (let ((backend (gent-llm-make-opencode-go-backend :headers '("X-Extra: yes"))))
+    (should (equal (gent-openai-backend-headers backend) '("X-Extra: yes")))
+    (should (equal (gent-openai--headers backend "first")
+                   '("Content-Type: application/json"
+                     "x-opencode-session: first" "X-Extra: yes")))
+    (should (equal (gent-openai--headers backend "second")
+                   '("Content-Type: application/json"
+                     "x-opencode-session: second" "X-Extra: yes")))
+    (should (equal (gent-openai--headers (gent-llm-copy-backend backend) "first")
+                   (gent-openai--headers backend "first"))))
+  (let ((backend (gent-llm-make-dumile-backend)))
+    (should (equal (gent-openai--headers backend "session")
+                   (gent-openai--headers backend)))))
+
+(ert-deftest gent-test-opencode-go-requires-session ()
+  (let ((backend (gent-llm-make-opencode-go-backend))
+        (writes 0) (processes 0))
+    (cl-letf (((symbol-function 'gent-openai--write-payload)
+               (lambda (&rest _) (cl-incf writes)))
+              ((symbol-function 'make-process)
+               (lambda (&rest _) (cl-incf processes))))
+      (dolist (id '(nil "" "id\nextra"))
+        (should-error (gent-llm-backend-chat backend :session-id id :prompt "hello")))
+      (should (string-match-p
+               "requires :session-id"
+               (error-message-string
+                (should-error (gent-llm-chat :backend backend :prompt "hello")))))
+      (should (= writes 0))
+      (should (= processes 0)))))
 
 ;;; Message building
 
@@ -561,20 +714,40 @@ completion."
 (ert-deftest gent-test-session-roundtrip ()
   (gent-test--with-project
     (let ((file (expand-file-name "s.eld"))
+          (session-id nil)
           (messages '(((role . "user") (content . "hi"))
                       ((role . "assistant") (content . "")
                        (tool_calls . [((id . "c") (function . ((name . "x"))))])))))
       (with-temp-buffer
         (setq gent--messages messages)
-        (gent-save-session file))
+        (gent-save-session file)
+        (setq session-id gent--session-id)
+        (should (stringp session-id)))
       (with-temp-buffer
         (gent-mode)
         (gent--draw nil)
         (gent-load-session file)
+        (should (equal gent--session-id session-id))
         (should (equal gent--messages messages))
         ;; The loaded conversation is shown above the prompt.
         (should (string-search "hi" (buffer-substring (point-min) gent--output-marker)))
         (should (string-search "⚙ x" (buffer-string)))))))
+
+(ert-deftest gent-test-session-load-legacy ()
+  (gent-test--with-project
+    (let ((file (expand-file-name "legacy.eld"))
+          (messages '(((role . "user") (content . "hello")))))
+      (with-temp-file file
+        (prin1 `((version . 1) (messages . ,messages)) (current-buffer)))
+      (with-temp-buffer
+        (gent-mode)
+        (gent--draw nil)
+        (setq gent--session-id "previous-conversation")
+        (gent-load-session file)
+        (should (equal gent--messages messages))
+        (should (stringp gent--session-id))
+        (should-not (string-empty-p gent--session-id))
+        (should-not (equal gent--session-id "previous-conversation"))))))
 
 ;;; Buffer
 
@@ -598,6 +771,194 @@ completion."
   (with-timeout (5 (error "Timed out waiting for the turn"))
     (while gent--busy
       (accept-process-output nil 0.05))))
+
+(ert-deftest gent-test-conversation-session-lifecycle ()
+  (gent-test--with-project
+    (gent-test--write-file "a.txt" "hello")
+    (let* ((gent-llm-default-backend (make-gent-test-backend))
+           (gent-backends (list (cons "other" (make-gent-test-backend :model-id "other"))))
+           (ids nil)
+           (fake (gent-test--fake-chat
+                  (list `((nil ,(gent-test--tool-call "c1" "read_file" '((path . "a.txt"))))
+                          ("first") ("settings changed") ("late")
+                          ("continued") ("reset") ("other buffer")))
+                  (list nil))))
+      (cl-letf (((symbol-function 'gent-llm-chat)
+                 (lambda (&rest args)
+                   (push (plist-get args :session-id) ids)
+                   (apply fake args))))
+        (gent-test--with-gent-buffer
+          (should-not gent--session-id)
+          (gent-test--type "read a.txt")
+          (gent-test--wait-idle)
+          (should (= (length ids) 2))
+          (should (stringp gent--session-id))
+          (should-not (string-empty-p gent--session-id))
+          (should (equal (car ids) (cadr ids)))
+          (gent-set-backend "other")
+          (gent-set-reasoning-effort "high")
+          (gent-test--type "after settings")
+          (gent-test--wait-idle)
+          ;; An interrupted request and its replacement keep the conversation ID.
+          (gent-test--type "interrupt me")
+          (gent-interrupt)
+          (gent-test--type "continue")
+          (gent-test--wait-idle)
+          (should (= (length ids) 5))
+          (should (cl-every (lambda (id) (equal id gent--session-id)) ids))
+          ;; Sharing the same backend does not share conversation IDs.
+          (setq gent--backend gent-llm-default-backend)
+          (gent-reset)
+          (should-not gent--session-id)
+          (gent-test--type "new conversation")
+          (gent-test--wait-idle)
+          (should-not (equal (car ids) (cadr ids))))
+        (gent-test--with-gent-buffer
+          (gent-test--type "separate buffer")
+          (gent-test--wait-idle))
+        (should (= (length ids) 7))
+        (should (= (length (delete-dups (copy-sequence ids))) 3))))))
+
+(ert-deftest gent-test-batch-session-id ()
+  (gent-test--with-project
+    (let* ((ids nil)
+           (fake (gent-test--fake-chat (list '(("one") ("two"))) (list nil))))
+      (cl-letf (((symbol-function 'gent-llm-chat)
+                 (lambda (&rest args)
+                   (push (plist-get args :session-id) ids)
+                   (apply fake args))))
+        (with-temp-buffer
+          (let ((standard-output (current-buffer)))
+            (gent-batch-run "first")
+            (gent-batch-run "second"))))
+      (should (= (length ids) 2))
+      (should (cl-every (lambda (id) (and (stringp id) (not (string-empty-p id)))) ids))
+      (should-not (equal (car ids) (cadr ids))))))
+
+(ert-deftest gent-test-set-backend-copies-configuration ()
+  (let* ((go (gent-llm-make-opencode-go-backend :model "go-model" :api-key "go-key"))
+         (dumile (gent-llm-make-dumile-backend :model "dumile-model" :api-key "dumile-key"))
+         (gent-backends (list (cons "go" go) (cons "dumile" dumile)))
+         (gent-llm-default-backend go))
+    (gent-test--with-gent-buffer
+      (gent-set-backend "go")
+      (should-not (eq gent--backend go))
+      (let ((previous gent--backend))
+        (gent-set-backend "dumile")
+        (should-not (eq gent--backend dumile))
+        (should (equal gent--backend-name "dumile"))
+        (should (equal (gent-llm-backend-model gent--backend) "dumile-model"))
+        (should (equal (gent-openai--url gent--backend)
+                       "https://dumile.local/v1/chat/completions"))
+        (should (equal (gent-openai--headers gent--backend "session")
+                       '("Content-Type: application/json" "Authorization: Bearer dumile-key")))
+        (should (equal (gent-llm-backend-model previous) "go-model"))
+        (should (member "x-opencode-session: session"
+                        (gent-openai--headers previous "session"))))
+      (gent-set-reasoning-effort "high")
+      (should (equal (gent-llm-backend-reasoning-effort dumile) "low")))
+    (should (eq gent-llm-default-backend go))
+    (should (equal (gent-llm-backend-model go) "go-model"))
+    (gent-test--with-gent-buffer
+      (should-not gent--backend)
+      (should-not gent--backend-name)
+      (should (eq (gent--current-backend) go)))))
+
+(ert-deftest gent-test-set-backend-interactive ()
+  (let* ((gent-backends (list (cons "local" (make-gent-test-backend :model-id "m"))))
+         (gent-llm-default-backend nil)
+         (current-prefix-arg '(4))
+         (reads 0))
+    (gent-test--with-gent-buffer
+      (should (eq (keymap-lookup gent-mode-map "C-c C-m") #'gent-set-backend))
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (prompt collection &optional _predicate require-match &rest _)
+                   (cl-incf reads)
+                   (should (equal prompt "Backend: "))
+                   (should (eq collection gent-backends))
+                   (should require-match)
+                   "local")))
+        (call-interactively #'gent-set-backend))
+      (should (= reads 1))
+      (should (equal (gent-llm-backend-model gent--backend) "m")))))
+
+(ert-deftest gent-test-set-backend-invalid-selection ()
+  (let ((gent-backends (list (cons "local" (make-gent-test-backend)))))
+    (gent-test--with-gent-buffer
+      (gent-set-backend "local")
+      (let ((previous gent--backend))
+        (should-error (gent-set-backend "missing") :type 'user-error)
+        (should (eq gent--backend previous))
+        (should (equal gent--backend-name "local")))
+      (let ((gent-backends nil))
+        (should-error (call-interactively #'gent-set-backend) :type 'user-error)))))
+
+(ert-deftest gent-test-generic-backend-settings ()
+  (dolist (backend (list (make-gent-test-backend)
+                         (gent-make-openai-backend :model "original"
+                                                   :url-base "https://test/v1")))
+    (let ((gent-llm-default-backend nil)
+          (gent-backends (list (cons "local" backend))))
+      (gent-test--with-gent-buffer
+        (gent-set-backend "local")
+        (should-not (eq gent--backend backend))
+        (should (equal (gent-llm-backend-model gent--backend) "original"))
+        (let ((previous gent--backend))
+          (gent-set-reasoning-effort "high")
+          (should-not (eq gent--backend previous))
+          (should (equal (gent-llm-backend-reasoning-effort gent--backend) "high"))
+          (should (equal (gent-llm-backend-reasoning-effort previous) "low")))
+        (should (equal (gent-llm-backend-model gent--backend) "original"))
+        (should (equal (gent-llm-backend-model backend) "original"))
+        (should (equal (gent-llm-backend-reasoning-effort backend) "low"))))))
+
+(ert-deftest gent-test-generic-backend-session ()
+  (gent-test--with-project
+    (let ((gent-llm-default-backend (gent-make-openai-backend :model "original"))
+          (gent-backends (list (cons "saved" (make-gent-test-backend :model-id "saved"))))
+          (file (expand-file-name "session.eld")))
+      (gent-test--with-gent-buffer
+        (gent-set-backend "saved")
+        (setq gent--messages '(((role . "user") (content . "hello"))))
+        (gent-save-session file))
+      (gent-test--with-gent-buffer
+        (gent-load-session file)
+        (should (gent-test-backend-p gent--backend))
+        (should-not (eq gent--backend gent-llm-default-backend))
+        (should-not (eq gent--backend (alist-get "saved" gent-backends nil nil #'equal)))
+        (should (equal gent--backend-name "saved"))
+        (should (equal (gent-llm-backend-model gent--backend) "saved"))
+        (should (equal (gent-llm-backend-model gent-llm-default-backend) "original"))
+        (should (equal gent--messages '(((role . "user") (content . "hello")))))))))
+
+(ert-deftest gent-test-session-load-legacy-model ()
+  (gent-test--with-project
+    (let ((gent-llm-default-backend (make-gent-test-backend))
+          (file (expand-file-name "legacy-model.eld")))
+      (with-temp-file file
+        (prin1 '((version . 1) (model . "saved")) (current-buffer)))
+      (gent-test--with-gent-buffer
+        (gent-load-session file)
+        (should (equal (gent-llm-backend-model gent--backend) "saved"))
+        (should-not gent--backend-name)
+        (should (equal (gent-llm-backend-model gent-llm-default-backend) "original"))))))
+
+(ert-deftest gent-test-session-load-missing-backend ()
+  (gent-test--with-project
+    (let ((gent-backends nil)
+          (file (expand-file-name "missing-backend.eld")))
+      (with-temp-file file
+        (prin1 '((version . 1) (backend-name . "missing") (model . "saved"))
+               (current-buffer)))
+      (gent-test--with-gent-buffer
+        (setq gent--backend (make-gent-test-backend)
+              gent--messages '(((role . "user") (content . "keep")))
+              gent--session-id "current")
+        (let ((previous gent--backend))
+          (should-error (gent-load-session file) :type 'user-error)
+          (should (eq gent--backend previous))
+          (should (equal gent--session-id "current"))
+          (should (equal gent--messages '(((role . "user") (content . "keep"))))))))))
 
 (ert-deftest gent-test-buffer-send ()
   (gent-test--with-project
@@ -663,13 +1024,16 @@ The script sees curl's arguments and gets the config on stdin."
            ,@body)
        (delete-directory dir t))))
 
-(defun gent-test--chat ()
-  "Run `gent-llm-chat' and return (TOKENS CALLS DONE ERROR)."
+(defun gent-test--chat (&optional backend session-id)
+  "Run `gent-llm-chat' and return (TOKENS CALLS DONE ERROR).
+Use BACKEND when non-nil, otherwise create a test OpenAI backend.
+Pass SESSION-ID as the conversation ID."
   (let ((tokens nil) (calls nil) (done nil) (error nil) (finished nil))
     (gent-llm-chat
-     :backend (gent-llm-make-backend
-               :model "m"
-               :provider (gent-llm-make-provider :url-base "http://x" :api-key "k"))
+     :backend (or backend (gent-make-openai-backend
+                          :model "m"
+                          :url-base "http://x" :api-key "k"))
+     :session-id session-id
      :prompt "hi"
      :on-token (lambda (token) (push token tokens))
      :on-tool-calls (lambda (c _) (setq calls c))
@@ -701,6 +1065,14 @@ The script sees curl's arguments and gets the config on stdin."
 grep -q 'header = \"Authorization: Bearer k\"' || exit 7
 "
     (should-not (nth 3 (gent-test--chat)))))
+
+(ert-deftest gent-test-curl-session-header ()
+  (gent-test--with-fake-curl
+      (concat "case \"$*\" in *conversation*) exit 9;; esac\n"
+              "grep -q 'header = \"x-opencode-session: conversation\"' || exit 7\n")
+    (should-not (nth 3 (gent-test--chat
+                       (gent-llm-make-opencode-go-backend :model "m")
+                       "conversation")))))
 
 (ert-deftest gent-test-curl-error ()
   (gent-test--with-fake-curl "cat > /dev/null; echo 'bad key'; exit 22\n"

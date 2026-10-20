@@ -25,7 +25,7 @@
 ;;   C-c C-t  `gent-toggle-details'     show or hide reasoning and tool output
 ;;   C-c C-e  `gent-set-reasoning-effort' change how hard the model thinks
 ;;   C-c C-k  `gent-reset'              forget the conversation
-;;   C-c C-m  `gent-set-model'          switch model (or provider)
+;;   C-c C-m  `gent-set-backend'        select a configured backend
 ;;
 ;; Sessions can be saved with `gent-save-session' and restored with
 ;; `gent-load-session'.  `gent-batch-run' runs a single prompt through
@@ -46,6 +46,12 @@
 (defgroup gent nil
   "A gentlemanly coding agent."
   :group 'tools)
+
+(defvar gent-backends nil
+  "Alist of (NAME . BACKEND) entries offered by `gent-set-backend'.
+Each BACKEND is a fully configured `gent-llm-generic-backend', including
+its model and provider settings.  Selection copies it for the current
+conversation; registry entries and `gent-llm-default-backend' are unchanged.")
 
 (defcustom gent-system-prompt
   "You are gent, a coding agent running inside Emacs.  You help the user \
@@ -157,11 +163,17 @@ A plist with `:name', `:kind', `:text', `:respond' and `:write'.")
 (defvar-local gent--messages nil
   "Conversation history, a list of message alists, oldest first.")
 
+(defvar-local gent--session-id nil
+  "ID of this conversation, generated lazily and preserved across requests.")
+
 (defvar-local gent--root nil
   "Project root the gent buffer works in.")
 
 (defvar-local gent--backend nil
-  "Backend used by this buffer, or nil for `gent-llm-default-backend'.")
+  "A `gent-llm-generic-backend', or nil for `gent-llm-default-backend'.")
+
+(defvar-local gent--backend-name nil
+  "Name in `gent-backends' selected for this conversation, or nil.")
 
 (defvar-local gent--output-marker nil
   "Where output is inserted in a gent buffer, just before the prompt.")
@@ -190,6 +202,11 @@ It changes whenever a turn starts or is cancelled, so callbacks of
 a stale turn can tell they should stop.")
 
 ;;; Messages
+
+(defun gent--session-id ()
+  "Return this conversation's ID, generating one if needed."
+  (or gent--session-id
+      (setq gent--session-id (gent-llm-make-session-id))))
 
 (defun gent--root ()
   "Return the project root for the current buffer."
@@ -424,6 +441,7 @@ SHELL receives the output.  ITERATION counts requests in this turn."
       (condition-case err
           (setq gent--request-process
            (gent-llm-chat
+           :session-id (gent--session-id)
            :messages (cons system gent--messages)
            :backend gent--backend
            :tools (gent-tools-definitions)
@@ -776,7 +794,7 @@ While a turn is running the prompt is queued and sent after it."
   "C-c C-t" #'gent-toggle-details
   "C-c C-e" #'gent-set-reasoning-effort
   "C-c C-k" #'gent-reset
-  "C-c C-m" #'gent-set-model
+  "C-c C-m" #'gent-set-backend
   "C-c C-a" #'gent-approve
   "C-c C-r" #'gent-reject
   "C-c C-v" #'gent-review)
@@ -850,6 +868,7 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
   (when (or gent--busy gent--pending)
     (gent-interrupt))
   (setq gent--messages nil)
+  (setq gent--session-id nil)
   (setq gent-tools-session-trusted nil)
   (gent--draw nil)
   (gent--update-mode-line)
@@ -858,35 +877,31 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
 (defun gent--current-backend ()
   "Return the backend of the current gent buffer, or signal an error."
   (or gent--backend gent-llm-default-backend
-      (user-error "gent: no backend; set `gent-llm-default-backend'")))
+      (user-error "Gent: no backend; set `gent-llm-default-backend'")))
 
 (defun gent--copy-backend ()
   "Return a copy of the current backend, to change for this buffer only."
   (gent-llm-copy-backend (gent--current-backend)))
 
-(defun gent-set-model (model &optional url-base)
-  "Use MODEL for requests from the current gent buffer.
-With a prefix argument, also prompt for the API URL-BASE, to switch
-provider."
+(defun gent--named-backend (name)
+  "Return the configured backend NAME, or signal a user error."
+  (or (alist-get name gent-backends nil nil #'equal)
+      (user-error "Gent: unknown backend %S; configure `gent-backends'" name)))
+
+(defun gent-set-backend (name)
+  "Select NAME from `gent-backends' for the current conversation.
+Copy the configured backend, including its model and provider settings.
+Leave registry entries and `gent-llm-default-backend' unchanged."
   (interactive
-   (let ((backend (gent--current-backend)))
-     (list (read-string (format "Model (default %s): "
-                                (gent-llm-backend-model backend))
-                        nil nil (gent-llm-backend-model backend))
-           (when current-prefix-arg
-             (read-string "API URL base: "
-                          (gent-llm-provider-url-base
-                           (gent-llm-backend-provider backend)))))))
+   (progn
+     (unless gent-backends
+       (user-error "Gent: no backends configured; set `gent-backends'"))
+     (list (completing-read "Backend: " gent-backends nil t
+                            nil nil gent--backend-name))))
   (gent--ensure-buffer)
-  (let ((backend (gent--copy-backend)))
-    (setf (gent-llm-backend-model backend) model)
-    (when url-base
-      (let ((provider (gent-llm-copy-provider (gent-llm-backend-provider backend))))
-        (setf (gent-llm-provider-url-base provider) url-base)
-        (setf (gent-llm-backend-provider backend) provider)))
-    (setq gent--backend backend)
-    (message "gent: using %s at %s" model
-             (gent-llm-provider-url-base (gent-llm-backend-provider backend)))))
+  (setq gent--backend (gent-llm-copy-backend (gent--named-backend name))
+        gent--backend-name name)
+  (message "gent: using %s" name))
 
 (defun gent-set-reasoning-effort (effort)
   "Set the reasoning EFFORT for requests from the current gent buffer.
@@ -913,12 +928,15 @@ See `gent-llm-backend-reasoning-effort'."
      (make-directory gent-session-directory t)
      (list (read-file-name "Save session to: " gent-session-directory nil nil
                            (format-time-string "%Y%m%d-%H%M%S.eld")))))
-  (let ((messages gent--messages)
+  (let ((session-id (gent--session-id))
+        (messages gent--messages)
         (root (gent--root))
+        (backend-name gent--backend-name)
         (model (and gent--backend (gent-llm-backend-model gent--backend))))
     (with-temp-file file
       (let ((print-length nil) (print-level nil))
-        (prin1 `((version . 1) (root . ,root) (model . ,model)
+        (prin1 `((version . 1) (session-id . ,session-id)
+                 (root . ,root) (backend-name . ,backend-name) (model . ,model)
                  (messages . ,messages))
                (current-buffer))))
     (message "gent: saved %d messages to %s" (length messages) file)))
@@ -932,16 +950,24 @@ See `gent-llm-backend-reasoning-effort'."
   (gent--ensure-buffer)
   (when (or gent--busy gent--pending)
     (gent-interrupt))
-  (let ((data (with-temp-buffer
-                (insert-file-contents file)
-                (read (current-buffer)))))
+  (let* ((data (with-temp-buffer
+                 (insert-file-contents file)
+                 (read (current-buffer))))
+         (name (map-elt data 'backend-name))
+         (model (map-elt data 'model))
+         (backend
+          (cond
+           (name (gent-llm-copy-backend (gent--named-backend name)))
+           ;; Older sessions saved only a model ID.
+           (model
+            (let ((copy (gent--copy-backend)))
+              (setf (gent-llm-backend-model copy) model)
+              copy)))))
+    (setq gent--session-id (or (map-elt data 'session-id)
+                              (gent-llm-make-session-id)))
     (setq gent--messages (map-elt data 'messages))
-    (let ((model (map-elt data 'model)))
-      (if model
-          (let ((backend (gent--copy-backend)))
-            (setf (gent-llm-backend-model backend) model)
-            (setq gent--backend backend))
-        (setq gent--backend nil)))
+    (setq gent--backend backend
+          gent--backend-name name)
     (gent--draw gent--messages)
     (gent--update-mode-line)
     (message "gent: loaded %d messages from %s" (length gent--messages) file)))
