@@ -156,6 +156,7 @@ Use `gent-review' to see all of it."
   (backend nil :documentation "Backend, or nil for `gent-llm-default-backend'.")
   (backend-name nil :documentation "Selected name in `gent-backends', or nil.")
   (request-process nil :documentation "Model request process, or nil.")
+  (tool-cancel nil :documentation "Function cancelling the running tool call, or nil.")
   (state 'idle :documentation "Execution state: idle, running, or (awaiting-approval . PLIST).
 The approval PLIST has :name, :kind, :text, :respond and :write keys.")
   (turn 0 :documentation "Generation counter advanced on start and cancellation.
@@ -604,23 +605,25 @@ Stop silently if TURN is no longer current."
            (write (map-elt shell :write-output)))
       (funcall write (gent--format-tool-call name arguments))
       (with-current-buffer buffer
-        (gent-tools-call
-         name arguments (gent--root)
-         (lambda (result)
-           ;; Let synchronous tools unwind before the next step.
-           (run-at-time
-            0 nil
-            (lambda ()
-              (when (gent--live-p buffer turn)
-                (with-current-buffer buffer
-                  (gent--append `((role . "tool")
-                                  (tool_call_id . ,(map-elt call 'id))
-                                  (content . ,result))))
-                (funcall write (gent--format-tool-result result))
-                (gent--run-calls buffer turn shell (cdr calls) then)))))
-         (lambda (_name kind text respond)
-           (when (gent--live-p buffer turn)
-             (gent--await-approval buffer write name kind text respond))))))))
+        (setf (gent--session-tool-cancel gent--current-session)
+              (gent-tools-call
+               name arguments (gent--root)
+               (lambda (result)
+                 ;; Let synchronous tools unwind before the next step.
+                 (run-at-time
+                  0 nil
+                  (lambda ()
+                    (when (gent--live-p buffer turn)
+                      (with-current-buffer buffer
+                        (setf (gent--session-tool-cancel gent--current-session) nil)
+                        (gent--append `((role . "tool")
+                                        (tool_call_id . ,(map-elt call 'id))
+                                        (content . ,result))))
+                      (funcall write (gent--format-tool-result result))
+                      (gent--run-calls buffer turn shell (cdr calls) then)))))
+               (lambda (_name kind text respond)
+                 (when (gent--live-p buffer turn)
+                   (gent--await-approval buffer write name kind text respond)))))))))
 
 (defun gent--await-approval (buffer write name kind text respond)
   "Pause BUFFER's turn until the user answers a change by tool NAME.
@@ -1011,10 +1014,15 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
   (add-hook 'kill-buffer-hook #'gent--kill-request nil t))
 
 (defun gent--kill-request ()
-  "Stop the model request of the current buffer, if any."
-  (let ((process (gent--session-request-process gent--current-session)))
+  "Stop the model request and tool call of the current buffer, if any."
+  (let* ((session gent--current-session)
+         (process (gent--session-request-process session))
+         (cancel (gent--session-tool-cancel session)))
     (when (process-live-p process)
-      (delete-process process))))
+      (delete-process process))
+    (when cancel
+      (setf (gent--session-tool-cancel session) nil)
+      (funcall cancel))))
 
 (defun gent--buffer-p (&optional buffer)
   "Return non-nil if BUFFER (default: current) is a gent buffer."
@@ -1059,7 +1067,6 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
       (gent--transition 'interrupt)
       (when (and active (gent--buffer-p))
         (gent--insert-output (current-buffer) "\n[interrupted]\n")))
-    (gent-tools-kill-processes)
     (gent--kill-request)
     (setf (gent--session-messages session)
           (gent--repair (gent--session-messages session)))

@@ -684,6 +684,48 @@ Approval requests go to `gent-test--confirm'."
                              (gent-test--call "run_shell" '((command . "sleep 5")
                                                             (timeout . 0.2))))))))
 
+(defun gent-test--shell-processes (command)
+  "Return the live processes running shell COMMAND."
+  (seq-filter (lambda (process)
+                (and (process-live-p process)
+                     (equal (car (last (process-command process))) command)))
+              (process-list)))
+
+(ert-deftest gent-test-cancel-running-call ()
+  (gent-test--with-project
+    (let ((gent-tools-trusted '("run_shell"))
+          slow-result fast-result)
+      (let ((cancel (gent-tools-call "run_shell" "{\"command\": \"sleep 5\"}"
+                                     default-directory
+                                     (lambda (r) (setq slow-result r)))))
+        (gent-tools-call "run_shell" "{\"command\": \"sleep 0.2; echo fast\"}"
+                         default-directory (lambda (r) (setq fast-result r)))
+        (should (gent-test--shell-processes "sleep 5"))
+        (funcall cancel)
+        (should-not (gent-test--shell-processes "sleep 5"))
+        ;; Other calls keep running, and the cancelled call never answers.
+        (with-timeout (5 (error "Timed out"))
+          (while (not fast-result) (accept-process-output nil 0.05)))
+        (should (equal fast-result "fast\n[exit code 0]"))
+        (should-not slow-result)
+        ;; Cancelling again, or after the call finished, does nothing.
+        (funcall cancel)))))
+
+(ert-deftest gent-test-cancel-pending-call ()
+  (gent-test--with-project
+    (let* ((respond nil)
+           (result nil)
+           (cancel (gent-tools-call "run_shell" "{\"command\": \"touch x\"}"
+                                    default-directory
+                                    (lambda (r) (setq result r))
+                                    (lambda (_name _kind _text r) (setq respond r)))))
+      (should respond)
+      (funcall cancel)
+      (funcall respond t)
+      (accept-process-output nil 0.2)
+      (should-not result)
+      (should-not (file-exists-p "x")))))
+
 ;;; Agent loop
 
 (defun gent-test--fake-chat (responses requests)
@@ -853,6 +895,23 @@ completion."
         ;; The interrupted turn never finishes on its own.
         (setq done t))
       (should-not (file-exists-p "x")))))
+
+(ert-deftest gent-test-interrupt-cancels-running-tool ()
+  (gent-test--with-project
+    (cl-letf (((symbol-function 'gent--ensure-buffer) #'ignore))
+      (gent-test--with-paused-loop
+          `((nil ,(gent-test--tool-call "c1" "run_shell" '((command . "sleep 5")))))
+          "sleep"
+        (gent-approve)
+        (should (gent-test--shell-processes "sleep 5"))
+        (should (gent--session-tool-cancel gent--current-session))
+        (gent-interrupt)
+        (should-not (gent-test--shell-processes "sleep 5"))
+        (should-not (gent--session-tool-cancel gent--current-session))
+        (should (equal (map-elt (car (last (gent--session-messages gent--current-session))) 'content)
+                       "Cancelled by the user."))
+        ;; The interrupted turn never finishes on its own.
+        (setq done t)))))
 
 (ert-deftest gent-test-loop-reasoning ()
   (gent-test--with-project

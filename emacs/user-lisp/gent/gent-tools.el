@@ -18,6 +18,8 @@
 ;; with `default-directory' bound to the project root; they must call
 ;; DONE exactly once with the result string.  Handlers may signal an
 ;; error instead, which is reported back to the model as the result.
+;; Handlers that start asynchronous work return a function that cancels
+;; it; `gent-tools-call' returns a function that cancels the whole call.
 ;;
 ;; Tools that change things declare a `:preview' function.  Before such
 ;; a tool runs, the caller's CONFIRM function (see `gent-tools-call') is
@@ -60,9 +62,6 @@
 
 (defvar gent-tools--registry nil
   "Alist of (NAME . `gent-tool'), in definition order.")
-
-(defvar gent-tools--processes nil
-  "Live processes started by tools, killed by `gent-tools-kill-processes'.")
 
 (defun gent-tools--argument-type-p (value type)
   "Return non-nil when VALUE matches the argument TYPE."
@@ -141,7 +140,10 @@ ARGS for a tool without arguments.  Unknown arguments are rejected.
 
 HANDLER is called with (ARGS DONE), where ARGS is a symbol-keyed alist
 of validated values, and must call DONE exactly once with a result string,
-immediately or asynchronously.  Its return value is ignored.  PREVIEW,
+immediately or asynchronously.  A handler that works asynchronously
+may return a function of no arguments that cancels the work; DONE need
+not be called after cancelling.  Any other return value is ignored, so
+handlers must not return a function by accident.  PREVIEW,
 when non-nil, is called with the same ARGS and returns (KIND . TEXT)
 describing the change so the user can confirm it."
   (let* ((args (copy-tree args))
@@ -264,25 +266,37 @@ RESPOND is called with the answer: t to approve, nil to reject,
 \(reject . NOTE) to reject with a note for the model, or `always'
 to approve and trust NAME for the rest of the session.  On approval
 the preview is computed again; if it changed, CONFIRM is called
-again with the new one.  Without CONFIRM, such calls are rejected."
+again with the new one.  Without CONFIRM, such calls are rejected.
+
+Return a function of no arguments that cancels the call: a pending
+approval is ignored, running work is stopped through the handler's
+cancel function, and DONE is not called afterwards."
   (let* ((called nil)
+         (cancel-handler nil)
          (finish (lambda (result)
                    (unless called
                      (setq called t)
                      (funcall done (gent-tools-truncate
                                     (if (stringp result)
                                         result
-                                      (format "%s" result)))))))
+                                      (format "%s" result))))
+                     ;; Handlers often return this; it must not look like a
+                     ;; cancel function.
+                     nil)))
          (tool (gent-tools-get name))
          (session (current-buffer))
          (default-directory (file-name-as-directory root)))
     (cl-labels
-        ((run (args)
+        ((start (args)
+           (let ((cancel (funcall (gent-tool-handler tool) args finish)))
+             (when (functionp cancel)
+               (setq cancel-handler cancel))))
+         (run (args)
            (let ((preview (and (gent-tool-preview tool)
                                (not (gent-tools--trusted-p name))
                                (funcall (gent-tool-preview tool) args))))
              (cond ((not preview)
-                    (funcall (gent-tool-handler tool) args finish))
+                    (start args))
                    ((not confirm)
                     (funcall finish "Error: this tool needs approval and nobody can approve it."))
                    (t (ask args preview)))))
@@ -290,7 +304,7 @@ again with the new one.  Without CONFIRM, such calls are rejected."
            (let ((answered nil))
              (funcall confirm name (car preview) (cdr preview)
                       (lambda (answer)
-                        (unless answered
+                        (unless (or answered called)
                           (setq answered t)
                           (let ((default-directory (file-name-as-directory root)))
                             (condition-case err
@@ -306,7 +320,7 @@ again with the new one.  Without CONFIRM, such calls are rejected."
                    (cl-pushnew name gent-tools-session-trusted :test #'equal)))
                (let ((fresh (funcall (gent-tool-preview tool) args)))
                  (if (equal fresh preview)
-                     (funcall (gent-tool-handler tool) args finish)
+                     (start args)
                    (ask args fresh)))))))
       (condition-case err
           (if (not tool)
@@ -314,14 +328,12 @@ again with the new one.  Without CONFIRM, such calls are rejected."
                                       name (string-join (gent-tools-names) ", ")))
             (run (gent-tools--prepare-arguments
                   tool (gent-tools--parse-arguments arguments))))
-        (error (funcall finish (format "Error: %s" (error-message-string err))))))))
-
-(defun gent-tools-kill-processes ()
-  "Kill every process started by a tool."
-  (dolist (process gent-tools--processes)
-    (when (process-live-p process)
-      (delete-process process)))
-  (setq gent-tools--processes nil))
+        (error (funcall finish (format "Error: %s" (error-message-string err)))))
+      (lambda ()
+        (unless called
+          (setq called t)
+          (when cancel-handler
+            (funcall cancel-handler)))))))
 
 ;;; File helpers
 
@@ -511,7 +523,8 @@ Prefer edit_file for changes to existing files."
 ;;; run_shell
 
 (defun gent-tools--run-shell (args done)
-  "Run the command in ARGS asynchronously and call DONE with its output."
+  "Run the command in ARGS asynchronously and call DONE with its output.
+Return a function that kills the command."
   (let* ((command (map-elt args 'command))
          (timeout (map-elt args 'timeout))
          (buffer (generate-new-buffer " *gent-shell*"))
@@ -531,7 +544,6 @@ Prefer edit_file for changes to existing files."
            (lambda (proc _event)
              (unless (process-live-p proc)
                (when timer (cancel-timer timer))
-               (setq gent-tools--processes (delq proc gent-tools--processes))
                (let ((output (if (buffer-live-p buffer)
                                  (with-current-buffer buffer (buffer-string))
                                ""))
@@ -546,13 +558,15 @@ Prefer edit_file for changes to existing files."
                                   (if timed-out
                                       (format "[timed out after %s seconds]" timeout)
                                     (format "[exit code %d]" status)))))))))
-    (push process gent-tools--processes)
     (process-send-eof process)
     (setq timer (run-at-time timeout nil
                              (lambda ()
                                (when (process-live-p process)
                                  (setq timed-out t)
-                                 (delete-process process)))))))
+                                 (delete-process process)))))
+    (lambda ()
+      (when (process-live-p process)
+        (delete-process process)))))
 
 (gent-define-tool
  "run_shell"
