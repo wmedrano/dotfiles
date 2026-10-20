@@ -59,6 +59,7 @@
   (scroll-conservatively 101)
   (scroll-margin 8)
   (indent-tabs-mode nil)
+  (fill-column 80)
   (ring-bell-function #'ignore)
   :config
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
@@ -336,9 +337,15 @@
 ;;; 8. Major Modes & Tools
 ;;; ----------------------------------------------------------------------------
 
+(defun set-fill-column-100 ()
+  "Set `fill-column' to 100 in the current buffer."
+  (interactive)
+  (setq fill-column 100))
+
 (use-package rust-ts-mode
   :mode "\\.rs\\'"
-  :hook (rust-ts-mode . eglot-ensure))
+  :hook ((rust-ts-mode . eglot-ensure)
+         ((rust-ts-mode rust-mode) . set-fill-column-100)))
 
 (use-package typescript-ts-mode
   :mode "\\.ts\\'"
