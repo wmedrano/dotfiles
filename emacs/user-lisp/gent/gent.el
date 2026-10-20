@@ -27,9 +27,8 @@
 ;;   C-c C-k  `gent-reset'              forget the conversation
 ;;   C-c C-m  `gent-set-backend'        select a configured backend
 ;;
-;; Sessions can be saved with `gent-save-session' and restored with
-;; `gent-load-session'.  `gent-batch-run' runs a single prompt through
-;; the full loop from the command line.
+;; `gent-batch-run' runs a single prompt through the full loop from the
+;; command line.
 
 ;;; Code:
 
@@ -115,12 +114,6 @@ Use `gent-review' to see all of it."
 (defcustom gent-prompt "gent> "
   "Prompt shown before the input area of a gent buffer."
   :type 'string
-  :group 'gent)
-
-(defcustom gent-session-directory
-  (locate-user-emacs-file "gent-sessions/")
-  "Directory where `gent-save-session' stores sessions."
-  :type 'directory
   :group 'gent)
 
 (defface gent-prompt-face
@@ -917,60 +910,6 @@ See `gent-llm-backend-reasoning-effort'."
     (setf (gent-llm-backend-reasoning-effort backend) effort)
     (setq gent--backend backend))
   (message "gent: reasoning effort %s" effort))
-
-;;; Sessions
-
-(defun gent-save-session (file)
-  "Save the conversation in the current gent buffer to FILE."
-  (interactive
-   (progn
-     (gent--ensure-buffer)
-     (make-directory gent-session-directory t)
-     (list (read-file-name "Save session to: " gent-session-directory nil nil
-                           (format-time-string "%Y%m%d-%H%M%S.eld")))))
-  (let ((session-id (gent--session-id))
-        (messages gent--messages)
-        (root (gent--root))
-        (backend-name gent--backend-name)
-        (model (and gent--backend (gent-llm-backend-model gent--backend))))
-    (with-temp-file file
-      (let ((print-length nil) (print-level nil))
-        (prin1 `((version . 1) (session-id . ,session-id)
-                 (root . ,root) (backend-name . ,backend-name) (model . ,model)
-                 (messages . ,messages))
-               (current-buffer))))
-    (message "gent: saved %d messages to %s" (length messages) file)))
-
-(defun gent-load-session (file)
-  "Replace the conversation in the current gent buffer with FILE's."
-  (interactive
-   (progn
-     (gent--ensure-buffer)
-     (list (read-file-name "Load session: " gent-session-directory nil t))))
-  (gent--ensure-buffer)
-  (when (or gent--busy gent--pending)
-    (gent-interrupt))
-  (let* ((data (with-temp-buffer
-                 (insert-file-contents file)
-                 (read (current-buffer))))
-         (name (map-elt data 'backend-name))
-         (model (map-elt data 'model))
-         (backend
-          (cond
-           (name (gent-llm-copy-backend (gent--named-backend name)))
-           ;; Older sessions saved only a model ID.
-           (model
-            (let ((copy (gent--copy-backend)))
-              (setf (gent-llm-backend-model copy) model)
-              copy)))))
-    (setq gent--session-id (or (map-elt data 'session-id)
-                              (gent-llm-make-session-id)))
-    (setq gent--messages (map-elt data 'messages))
-    (setq gent--backend backend
-          gent--backend-name name)
-    (gent--draw gent--messages)
-    (gent--update-mode-line)
-    (message "gent: loaded %d messages from %s" (length gent--messages) file)))
 
 ;;; Batch
 

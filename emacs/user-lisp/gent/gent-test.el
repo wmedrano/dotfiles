@@ -711,44 +711,6 @@ completion."
           (should-not finished)
           (should (= (length gent--messages) 1)))))))
 
-(ert-deftest gent-test-session-roundtrip ()
-  (gent-test--with-project
-    (let ((file (expand-file-name "s.eld"))
-          (session-id nil)
-          (messages '(((role . "user") (content . "hi"))
-                      ((role . "assistant") (content . "")
-                       (tool_calls . [((id . "c") (function . ((name . "x"))))])))))
-      (with-temp-buffer
-        (setq gent--messages messages)
-        (gent-save-session file)
-        (setq session-id gent--session-id)
-        (should (stringp session-id)))
-      (with-temp-buffer
-        (gent-mode)
-        (gent--draw nil)
-        (gent-load-session file)
-        (should (equal gent--session-id session-id))
-        (should (equal gent--messages messages))
-        ;; The loaded conversation is shown above the prompt.
-        (should (string-search "hi" (buffer-substring (point-min) gent--output-marker)))
-        (should (string-search "⚙ x" (buffer-string)))))))
-
-(ert-deftest gent-test-session-load-legacy ()
-  (gent-test--with-project
-    (let ((file (expand-file-name "legacy.eld"))
-          (messages '(((role . "user") (content . "hello")))))
-      (with-temp-file file
-        (prin1 `((version . 1) (messages . ,messages)) (current-buffer)))
-      (with-temp-buffer
-        (gent-mode)
-        (gent--draw nil)
-        (setq gent--session-id "previous-conversation")
-        (gent-load-session file)
-        (should (equal gent--messages messages))
-        (should (stringp gent--session-id))
-        (should-not (string-empty-p gent--session-id))
-        (should-not (equal gent--session-id "previous-conversation"))))))
-
 ;;; Buffer
 
 (defmacro gent-test--with-gent-buffer (&rest body)
@@ -911,54 +873,6 @@ completion."
         (should (equal (gent-llm-backend-model gent--backend) "original"))
         (should (equal (gent-llm-backend-model backend) "original"))
         (should (equal (gent-llm-backend-reasoning-effort backend) "low"))))))
-
-(ert-deftest gent-test-generic-backend-session ()
-  (gent-test--with-project
-    (let ((gent-llm-default-backend (gent-make-openai-backend :model "original"))
-          (gent-backends (list (cons "saved" (make-gent-test-backend :model-id "saved"))))
-          (file (expand-file-name "session.eld")))
-      (gent-test--with-gent-buffer
-        (gent-set-backend "saved")
-        (setq gent--messages '(((role . "user") (content . "hello"))))
-        (gent-save-session file))
-      (gent-test--with-gent-buffer
-        (gent-load-session file)
-        (should (gent-test-backend-p gent--backend))
-        (should-not (eq gent--backend gent-llm-default-backend))
-        (should-not (eq gent--backend (alist-get "saved" gent-backends nil nil #'equal)))
-        (should (equal gent--backend-name "saved"))
-        (should (equal (gent-llm-backend-model gent--backend) "saved"))
-        (should (equal (gent-llm-backend-model gent-llm-default-backend) "original"))
-        (should (equal gent--messages '(((role . "user") (content . "hello")))))))))
-
-(ert-deftest gent-test-session-load-legacy-model ()
-  (gent-test--with-project
-    (let ((gent-llm-default-backend (make-gent-test-backend))
-          (file (expand-file-name "legacy-model.eld")))
-      (with-temp-file file
-        (prin1 '((version . 1) (model . "saved")) (current-buffer)))
-      (gent-test--with-gent-buffer
-        (gent-load-session file)
-        (should (equal (gent-llm-backend-model gent--backend) "saved"))
-        (should-not gent--backend-name)
-        (should (equal (gent-llm-backend-model gent-llm-default-backend) "original"))))))
-
-(ert-deftest gent-test-session-load-missing-backend ()
-  (gent-test--with-project
-    (let ((gent-backends nil)
-          (file (expand-file-name "missing-backend.eld")))
-      (with-temp-file file
-        (prin1 '((version . 1) (backend-name . "missing") (model . "saved"))
-               (current-buffer)))
-      (gent-test--with-gent-buffer
-        (setq gent--backend (make-gent-test-backend)
-              gent--messages '(((role . "user") (content . "keep")))
-              gent--session-id "current")
-        (let ((previous gent--backend))
-          (should-error (gent-load-session file) :type 'user-error)
-          (should (eq gent--backend previous))
-          (should (equal gent--session-id "current"))
-          (should (equal gent--messages '(((role . "user") (content . "keep"))))))))))
 
 (ert-deftest gent-test-buffer-send ()
   (gent-test--with-project
