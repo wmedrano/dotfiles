@@ -25,7 +25,8 @@
 ;; a tool runs, the caller's CONFIRM function (see `gent-tools-call') is
 ;; given the preview (a diff or the command) and a RESPOND callback.
 ;; Nothing runs until RESPOND is called, so the user can take as long as
-;; they like.  Tools listed in `gent-tools-trusted' skip this step.
+;; they like.  Tools listed in `gent-tools-trusted', or accepted by the
+;; caller's TRUSTED predicate, skip this step.
 
 ;;; Code:
 
@@ -52,9 +53,6 @@
   "Number of lines `read_file' returns when no limit is given."
   :type 'integer
   :group 'gent-tools)
-
-(defvar-local gent-tools-session-trusted nil
-  "Tool names trusted for the current session only.")
 
 (cl-defstruct (gent-tool (:constructor gent-tool--create))
   "A tool the model can call."
@@ -236,10 +234,11 @@ Signal an error when it is not a JSON object."
           (setq result (append result (list (cons name (plist-get options :default)))))))))
     result))
 
-(defun gent-tools--trusted-p (name)
-  "Return non-nil if tool NAME may run without confirmation."
+(defun gent-tools--trusted-p (name trusted)
+  "Return non-nil if tool NAME may run without confirmation.
+TRUSTED is the caller's predicate, or nil; see `gent-tools-call'."
   (or (member name gent-tools-trusted)
-      (member name gent-tools-session-trusted)))
+      (and trusted (funcall trusted name))))
 
 (defun gent-tools--rejection (answer)
   "Return the message for the model when ANSWER rejects a tool call.
@@ -252,7 +251,7 @@ Return nil when ANSWER approves it."
        "The user rejected this tool call."))
     (_ nil)))
 
-(defun gent-tools-call (name arguments root done &optional confirm)
+(defun gent-tools-call (name arguments root done &optional confirm trusted)
   "Run tool NAME with ARGUMENTS inside ROOT and call DONE with the result.
 ARGUMENTS is the raw JSON string from the model.  Errors, unknown
 tools and rejections are reported through DONE as strings, so the
@@ -264,9 +263,13 @@ called as (CONFIRM NAME KIND TEXT RESPOND), where KIND is `diff' or
 `command' and TEXT shows what will happen.  The tool waits until
 RESPOND is called with the answer: t to approve, nil to reject,
 \(reject . NOTE) to reject with a note for the model, or `always'
-to approve and trust NAME for the rest of the session.  On approval
+to approve and ask the caller to trust NAME from now on; the caller
+records that and reports it through TRUSTED.  On approval
 the preview is computed again; if it changed, CONFIRM is called
 again with the new one.  Without CONFIRM, such calls are rejected.
+
+TRUSTED, when non-nil, is called with NAME; a non-nil result skips
+confirmation, as for tools in `gent-tools-trusted'.
 
 Return a function of no arguments that cancels the call: a pending
 approval is ignored, running work is stopped through the handler's
@@ -284,7 +287,6 @@ cancel function, and DONE is not called afterwards."
                      ;; cancel function.
                      nil)))
          (tool (gent-tools-get name))
-         (session (current-buffer))
          (default-directory (file-name-as-directory root)))
     (cl-labels
         ((start (args)
@@ -293,7 +295,7 @@ cancel function, and DONE is not called afterwards."
                (setq cancel-handler cancel))))
          (run (args)
            (let ((preview (and (gent-tool-preview tool)
-                               (not (gent-tools--trusted-p name))
+                               (not (gent-tools--trusted-p name trusted))
                                (funcall (gent-tool-preview tool) args))))
              (cond ((not preview)
                     (start args))
@@ -315,9 +317,6 @@ cancel function, and DONE is not called afterwards."
            (let ((rejection (gent-tools--rejection answer)))
              (if rejection
                  (funcall finish rejection)
-               (when (and (eq answer 'always) (buffer-live-p session))
-                 (with-current-buffer session
-                   (cl-pushnew name gent-tools-session-trusted :test #'equal)))
                (let ((fresh (funcall (gent-tool-preview tool) args)))
                  (if (equal fresh preview)
                      (start args)

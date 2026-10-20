@@ -157,6 +157,8 @@ Use `gent-review' to see all of it."
   (backend-name nil :documentation "Selected name in `gent-backends', or nil.")
   (request-process nil :documentation "Model request process, or nil.")
   (tool-cancel nil :documentation "Function cancelling the running tool call, or nil.")
+  (trusted nil :documentation "Tool names approved with `always' in this conversation.")
+  (queue nil :documentation "Prompts sent during a turn, oldest first, to run after it ends.")
   (state 'idle :documentation "Execution state: idle, running, or (awaiting-approval . PLIST).
 The approval PLIST has :name, :kind, :text, :respond and :write keys.")
   (turn 0 :documentation "Generation counter advanced on start and cancellation.
@@ -208,9 +210,6 @@ tool details for await-approval.  Invalid transitions signal an error."
 
 (defvar-local gent--input-marker nil
   "Start of the editable input area of a gent buffer.")
-
-(defvar-local gent--queue nil
-  "Prompts sent during a turn, oldest first, to run after it ends.")
 
 (defvar-local gent--history nil
   "Ring of prompts sent from the gent buffer, most recent first.")
@@ -353,7 +352,8 @@ and :elided tool result IDs (or message positions) changed by compaction."
     (setq mode-line-process
           (list (format " ~%.1fk/%dk" (/ tokens 1000.0) (/ gent-context-max-tokens 1000))
                 (unless (eq (gent--state) 'idle) " …")
-                (when gent--queue (format " +%d queued" (length gent--queue)))
+                (when-let* ((queue (gent--session-queue gent--current-session)))
+                  (format " +%d queued" (length queue)))
                 (when (gent--session-pending gent--current-session)
                   (propertize " [approve?]" 'face 'gent-approval-face)))))
   (force-mode-line-update))
@@ -395,7 +395,8 @@ and :elided tool result IDs (or message positions) changed by compaction."
        ('awaiting-approval (propertize "Approval needed" 'face 'gent-approval-face))
        ('running "Working")
        ('idle "Ready"))
-     (when gent--queue (format " · %d queued" (length gent--queue)))
+     (when-let* ((queue (gent--session-queue session)))
+       (format " · %d queued" (length queue)))
      " ")))
 
 (defun gent--format-arguments (arguments)
@@ -623,7 +624,11 @@ Stop silently if TURN is no longer current."
                       (gent--run-calls buffer turn shell (cdr calls) then)))))
                (lambda (_name kind text respond)
                  (when (gent--live-p buffer turn)
-                   (gent--await-approval buffer write name kind text respond)))))))))
+                   (gent--await-approval buffer write name kind text respond)))
+               (lambda (name)
+                 (and (buffer-live-p buffer)
+                      (member name (gent--session-trusted
+                                    (gent--buffer-session buffer)))))))))))
 
 (defun gent--await-approval (buffer write name kind text respond)
   "Pause BUFFER's turn until the user answers a change by tool NAME.
@@ -678,9 +683,13 @@ for the current project, or one the user picks."
   "Answer the change pending in BUFFER with ANSWER.
 See `gent-tools-call' for the meaning of ANSWER."
   (with-current-buffer buffer
-    (let ((pending (gent--session-pending gent--current-session)))
+    (let* ((session gent--current-session)
+           (pending (gent--session-pending session)))
       (unless pending
         (user-error "Nothing is awaiting approval in %s" (buffer-name buffer)))
+      (when (eq answer 'always)
+        (cl-pushnew (plist-get pending :name) (gent--session-trusted session)
+                    :test #'equal))
       (gent--transition 'answer)
       (gent--update-mode-line)
       (gent--close-review buffer)
@@ -856,7 +865,9 @@ While a turn is running the prompt is queued and sent after it."
         (setq buffer-undo-list nil)
         (if (eq (gent--state) 'idle)
             (gent--send-prompt prompt)
-          (setq gent--queue (append gent--queue (list prompt)))
+          (let ((session gent--current-session))
+            (setf (gent--session-queue session)
+                  (append (gent--session-queue session) (list prompt))))
           (gent--update-mode-line)
           (message "gent: queued until the current turn ends"))))))
 
@@ -900,7 +911,7 @@ No tools, network requests or credential callbacks are run."
   (gent--ensure-buffer)
   (let* ((session gent--current-session)
          (prompt (string-trim (gent--input))))
-    (when (or (not (eq (gent--state) 'idle)) gent--queue)
+    (when (or (not (eq (gent--state) 'idle)) (gent--session-queue session))
       (user-error "Wait for the current turn and queued prompts before previewing"))
     (when (string-empty-p prompt)
       (user-error "No prompt to preview"))
@@ -963,8 +974,8 @@ No tools, network requests or credential callbacks are run."
     (with-current-buffer buffer
       (unless (eq (char-before gent--output-marker) ?\n)
         (gent--insert-output buffer "\n"))
-      (if gent--queue
-          (gent--send-prompt (pop gent--queue))
+      (if (gent--session-queue gent--current-session)
+          (gent--send-prompt (pop (gent--session-queue gent--current-session)))
         (gent--update-mode-line)))))
 
 (defun gent-previous-input (arg)
@@ -1070,7 +1081,7 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
     (gent--kill-request)
     (setf (gent--session-messages session)
           (gent--repair (gent--session-messages session)))
-    (setq gent--queue nil)
+    (setf (gent--session-queue session) nil)
     (gent--update-mode-line)))
 
 (defun gent-reset ()
@@ -1081,8 +1092,8 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
     (unless (eq (gent--state) 'idle)
       (gent-interrupt))
     (setf (gent--session-messages session) nil
-          (gent--session-id session) nil))
-  (setq gent-tools-session-trusted nil)
+          (gent--session-id session) nil
+          (gent--session-trusted session) nil))
   (gent--draw nil)
   (gent--update-mode-line)
   (message "gent: conversation reset"))

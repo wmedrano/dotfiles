@@ -57,6 +57,9 @@
 (defvar gent-test--confirm nil
   "Confirm function `gent-test--call' passes to `gent-tools-call'.")
 
+(defvar gent-test--trusted nil
+  "Trust predicate `gent-test--call' passes to `gent-tools-call'.")
+
 (defun gent-test--answering (answer)
   "Return a confirm function that answers every request with ANSWER."
   (lambda (_name _kind _text respond) (funcall respond answer)))
@@ -67,7 +70,7 @@ Approval requests go to `gent-test--confirm'."
   (let ((result nil))
     (gent-tools-call name (json-encode args) (or root default-directory)
                      (lambda (r) (setq result r))
-                     gent-test--confirm)
+                     gent-test--confirm gent-test--trusted)
     (while (not result)
       (accept-process-output nil 0.05))
     result))
@@ -609,14 +612,16 @@ Approval requests go to `gent-test--confirm'."
       (should (string-search "rejected"
                              (gent-test--call "run_shell" '((command . "touch x")))))
       (should-not (file-exists-p "x")))
-    (with-temp-buffer
-      (let* ((asked 0)
-             (gent-test--confirm (lambda (_name _kind _text respond)
-                                   (cl-incf asked)
-                                   (funcall respond 'always))))
-        (gent-test--call "run_shell" '((command . "true")))
-        (gent-test--call "run_shell" '((command . "true")))
-        (should (= asked 1))))
+    (let* ((asked 0)
+           (trusted nil)
+           (gent-test--trusted (lambda (name) (member name trusted)))
+           (gent-test--confirm (lambda (name _kind _text respond)
+                                 (cl-incf asked)
+                                 (push name trusted)
+                                 (funcall respond 'always))))
+      (gent-test--call "run_shell" '((command . "true")))
+      (gent-test--call "run_shell" '((command . "true")))
+      (should (= asked 1)))
     (let ((gent-tools-trusted '("run_shell"))
           (gent-test--confirm (lambda (&rest _) (error "Should not ask"))))
       (should (string-search "[exit code 0]"
@@ -1114,7 +1119,7 @@ completion."
                   (should (equal history (ring-elements gent--history)))
                   (should (= gent--history-index 0))
                   (should (eq (gent--state) 'idle))
-                  (should-not gent--queue)
+                  (should-not (gent--session-queue session))
                   (should-not (gent--session-id session))
                   (should-not (gent--session-request-process session))
                   (should (= (gent--session-turn session) 0)))
@@ -1194,8 +1199,8 @@ completion."
     (gent--transition 'await-approval '(:name "edit_file"))
     (should-error (gent-send-dry-run) :type 'user-error)
     (gent--transition 'interrupt)
-    (let ((gent--queue '("queued prompt")))
-      (should-error (gent-send-dry-run) :type 'user-error))
+    (setf (gent--session-queue gent--current-session) '("queued prompt"))
+    (should-error (gent-send-dry-run) :type 'user-error)
     (should (equal (gent--input) "preview me"))))
 
 (ert-deftest gent-test-backend-preview-excludes-authentication ()
@@ -1445,9 +1450,9 @@ completion."
         (gent-test--with-gent-buffer
           (gent-test--type "first")
           (gent-test--type "second")
-          (should (equal gent--queue '("second")))
+          (should (equal (gent--session-queue gent--current-session) '("second")))
           (gent-test--wait-idle)
-          (should-not gent--queue)
+          (should-not (gent--session-queue gent--current-session))
           (should (= (length (car requests)) 2))
           (should (string-match-p "first\n\none\n\ngent> second\n\ntwo"
                                   (buffer-substring-no-properties (point-min) gent--output-marker))))))))
@@ -1474,7 +1479,7 @@ completion."
             (should (eq (gent--state) 'awaiting-approval))
             (should (string-search "Approval needed" (gent--header-line)))
             (gent-test--type "next")
-            (should (equal gent--queue '("next")))
+            (should (equal (gent--session-queue gent--current-session) '("next")))
             (should (= (length (car requests)) 1))
             (should (equal (gent-test--read-file "a.txt") "old"))
             (gent--answer (current-buffer) answer)
@@ -1482,7 +1487,7 @@ completion."
             (should-not (gent--session-pending gent--current-session))
             (should (string-search "Working" (gent--header-line)))
             (gent-test--wait-idle)
-            (should-not gent--queue)
+            (should-not (gent--session-queue gent--current-session))
             (should (= (length (car requests)) 3))
             (should (string-search "Ready" (gent--header-line)))
             (should (equal (gent-test--read-file "a.txt")
@@ -1503,7 +1508,7 @@ completion."
         (let ((first (car requests)))
           (funcall (plist-get first :on-error) "request failed")
           (should (eq (gent--state) 'running))
-          (should-not gent--queue)
+          (should-not (gent--session-queue gent--current-session))
           (should (= (length requests) 2))
           ;; A late callback from the failed request cannot finish its successor.
           (funcall (plist-get first :on-done) "stale answer")
@@ -1515,6 +1520,16 @@ completion."
             (funcall (plist-get (car requests) :on-error) "late error")
             (funcall (plist-get (car requests) :on-done) "duplicate answer")
             (should (equal (buffer-string) transcript))))))))
+
+(ert-deftest gent-test-buffer-always-trusts-tool-until-reset ()
+  (cl-letf (((symbol-function 'gent-llm-chat) (lambda (&rest _) nil)))
+    (gent-test--with-gent-buffer
+      (gent-test--type "first")
+      (gent--await-approval (current-buffer) #'ignore "run_shell" 'command "true" #'ignore)
+      (gent--answer (current-buffer) 'always)
+      (should (equal (gent--session-trusted gent--current-session) '("run_shell")))
+      (gent-reset)
+      (should-not (gent--session-trusted gent--current-session)))))
 
 (ert-deftest gent-test-buffer-interrupt-discards-approval-and-queue ()
   (let (request)
@@ -1533,7 +1548,7 @@ completion."
         (should (eq (gent--state) 'awaiting-approval))
         (gent-interrupt)
         (should (eq (gent--state) 'idle))
-        (should-not gent--queue)
+        (should-not (gent--session-queue gent--current-session))
         (should-not (gent--session-pending gent--current-session))
         (should-error (gent-approve) :type 'user-error)
         (funcall (plist-get request :on-done) "stale answer")
