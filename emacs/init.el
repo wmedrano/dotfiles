@@ -27,6 +27,9 @@
 (setq gc-cons-threshold (* 128 1024 1024)
       gc-cons-percentage 0.5)
 
+;; Load a .el file instead of its stale .elc, e.g. in user-lisp/.
+(setq load-prefer-newer t)
+
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 
