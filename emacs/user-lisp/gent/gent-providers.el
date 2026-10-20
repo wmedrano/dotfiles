@@ -113,6 +113,11 @@ Include TOOL-CHOICE as the tool selection policy when non-nil."
       (push `(tool_choice . ,tool-choice) payload))
     payload))
 
+(cl-defmethod gent-llm-backend-preview ((backend gent-openai-backend) messages tools)
+  `((endpoint . ,(gent-openai--url backend))
+    (timeout . ,(gent-openai-backend-timeout backend))
+    (payload . ,(gent-openai--payload backend messages nil tools nil))))
+
 (defun gent-openai--merge-tool-call (acc tool-call)
   "Merge streamed TOOL-CALL fragment into ACC, returning ACC.
 ACC is a vector indexed by the fragment's `index'.  Argument

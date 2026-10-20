@@ -80,6 +80,16 @@ cancels the request without calling ON-ERROR.")
 (cl-defgeneric (setf gent-llm-backend-reasoning-effort) (effort backend)
   "Set BACKEND's reasoning effort to EFFORT, or nil to omit it.")
 
+(cl-defgeneric gent-llm-backend-preview (backend messages tools)
+  "Return safe request details for BACKEND, MESSAGES and TOOLS as an alist.
+Optional keys are `endpoint', `timeout' and `payload'.  Implementations
+must not perform requests, resolve credentials, or include authentication
+headers.  The default returns nil for backends without a wire preview.")
+
+(cl-defmethod gent-llm-backend-preview ((_backend gent-llm-generic-backend)
+                                      _messages _tools)
+  nil)
+
 (defvar gent-llm-default-backend nil
   "The `gent-llm-generic-backend' used when `gent-llm-chat' is not given one.")
 
@@ -97,18 +107,20 @@ Reuse this ID for every request in the same conversation."
     (error "Gent LLM: session ID must be a nonempty, single-line string")))
 
 (defun gent-llm--json-parse-string (string)
-  "Parse STRING as JSON, returning nil on failure."
+  "Parse STRING as JSON, decoding null as nil and returning nil on failure."
   (if (fboundp 'json-parse-string)
       (condition-case nil
-          (json-parse-string string :object-type 'alist)
+          (json-parse-string string :object-type 'alist :null-object nil)
         (error nil))
     (condition-case nil
-        (json-read-from-string string)
+        (let ((json-null nil))
+          (json-read-from-string string))
       (error nil))))
 
 (defun gent-llm--normalize-message (message)
   "Return MESSAGE as a clean, tool-aware alist.
-Preserves `role', `content', `tool_calls', `tool_call_id' and `name'."
+Preserves `role', `content', `reasoning_content', `tool_calls',
+`tool_call_id' and `name'."
   (let ((role (map-elt message 'role)))
     (when role
       (let ((out (list (cons 'role (format "%s" role))))
@@ -119,6 +131,9 @@ Preserves `role', `content', `tool_calls', `tool_call_id' and `name'."
                (push (cons 'content (substring-no-properties
                                      (format "%s" content)))
                      out)))
+        (let ((reasoning (map-elt message 'reasoning_content)))
+          (when (stringp reasoning)
+            (push (cons 'reasoning_content (substring-no-properties reasoning)) out)))
         (let ((tool-calls (map-elt message 'tool_calls)))
           (when tool-calls
             (push (cons 'tool_calls (vconcat tool-calls)) out)))
@@ -183,8 +198,10 @@ can generate one with `gent-llm-make-session-id'.
 
 MESSAGES is a list or vector of alists.  Besides ((role . R)
 \(content . C)), tool-aware messages are supported: an assistant turn
-may carry `tool_calls', and a tool turn may carry `tool_call_id' and
-`content'.  PROMPT, when given, is appended as a user message.
+may carry `tool_calls' and `reasoning_content', and a tool turn may
+carry `tool_call_id' and `content'.  Preserve streamed reasoning in
+the corresponding assistant message for APIs that require it on
+continuation.  PROMPT, when given, is appended as a user message.
 
 TOOLS is a list of `gent-llm-make-tool' definitions (or equivalent
 plists); TOOL-CHOICE is passed through as `tool_choice' when non-nil.

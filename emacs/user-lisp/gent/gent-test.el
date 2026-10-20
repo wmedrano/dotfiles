@@ -135,6 +135,28 @@ Approval requests go to `gent-test--confirm'."
 
 ;;; SSE parsing
 
+(ert-deftest gent-test-filter-null-fields ()
+  ;; Exercise both JSON parsers: explicit nulls should behave like absent fields.
+  (dolist (parser (list (symbol-function 'json-parse-string) nil))
+    (cl-letf (((symbol-function 'json-parse-string) parser))
+      (let ((result
+             (gent-openai--filter
+              `((:pending
+                 . ,(concat
+                     "data: {\"choices\":null}\n\n"
+                     "data: {\"choices\":[{\"delta\":null,\"finish_reason\":null}]}\n\n"
+                     "data: {\"choices\":[{\"delta\":{\"content\":null,"
+                     "\"reasoning_content\":null,\"tool_calls\":null},"
+                     "\"finish_reason\":null}]}\n\n"
+                     "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},"
+                     "\"finish_reason\":null}]}\n\n"
+                     "data: [DONE]\n\n"))))))
+        (should (equal (map-elt result :filtered) "Hello"))
+        (should (equal (map-elt result :reasoning) ""))
+        (should (equal (map-elt result :tool-calls) []))
+        (should-not (map-elt result :finish-reason))
+        (should-not (map-elt result :pending))))))
+
 (ert-deftest gent-test-filter-text ()
   (let ((result (gent-openai--filter
                  `((:pending . ,(gent-test--sse '((content . "Hel"))
@@ -287,6 +309,21 @@ Approval requests go to `gent-test--confirm'."
     (should-not (map-elt (aref messages 0) 'extra))
     (should (vectorp (map-elt (aref messages 0) 'tool_calls)))
     (should (equal (map-elt (aref messages 2) 'content) "next"))))
+
+(ert-deftest gent-test-normalize-reasoning ()
+  (dolist (reasoning (list (propertize "Think.\nThen act." 'face 'bold) "" nil))
+    (let* ((normalized (gent-llm--normalize-message
+                        `((role . "assistant") (content . "")
+                          (reasoning_content . ,reasoning))))
+           (value (map-elt normalized 'reasoning_content)))
+      (should (equal value reasoning))
+      (if reasoning
+          (should-not (text-properties-at 0 value))
+        (should-not (assq 'reasoning_content normalized)))))
+  (should (= (gent--estimate-tokens
+              '(((role . "assistant") (content . "1234")
+                 (reasoning_content . "12345678"))))
+             3)))
 
 (ert-deftest gent-test-system-message ()
   (gent-test--with-project
@@ -502,14 +539,14 @@ Return (SUCCESS OUTPUT MESSAGES REQUESTS)."
     (cl-letf (((symbol-function 'gent-llm-chat)
                (gent-test--fake-chat queue requests)))
       (with-temp-buffer
-        (setq gent--root default-directory)
+        (setf (gent--agent-state-root (gent--agent)) default-directory)
         (gent--start-turn
          (current-buffer) prompt
          (list (cons :write-output (lambda (text &optional _) (setq output (concat output text))))
                (cons :finish-output (lambda (ok) (setq success ok done t)))))
         (while (not done)
           (accept-process-output nil 0.05))
-        (list success output gent--messages (reverse (car requests)))))))
+        (list success output (gent--agent-state-messages (gent--agent)) (reverse (car requests)))))))
 
 (defun gent-test--tool-call (id name args)
   "Return a tool call with ID to NAME with ARGS."
@@ -557,13 +594,13 @@ completion."
      (cl-letf (((symbol-function 'gent-llm-chat)
                 (gent-test--fake-chat (list ,responses) requests)))
        (with-temp-buffer
-         (setq gent--root default-directory)
+         (setf (gent--agent-state-root (gent--agent)) default-directory)
          (gent--start-turn
           (current-buffer) ,prompt
           (list (cons :write-output (lambda (text &optional _) (setq output (concat output text))))
                 (cons :finish-output (lambda (ok) (setq success ok done t)))))
          (with-timeout (5 (error "Timed out waiting for approval"))
-           (while (and (not done) (not gent--pending))
+           (while (and (not done) (not (gent--agent-state-pending (gent--agent))))
              (accept-process-output nil 0.05)))
          ,@body
          (with-timeout (5 (error "Timed out waiting for the turn"))
@@ -581,7 +618,7 @@ completion."
           ("Done."))
         "edit"
       (let ((gent-buffer (current-buffer)))
-        (should (equal (plist-get gent--pending :name) "edit_file"))
+        (should (equal (plist-get (gent--agent-state-pending (gent--agent)) :name) "edit_file"))
         (should (string-search "+new" output))
         (should (string-search "Awaiting approval" output))
         (should (string-search "approve?" (format "%s" mode-line-process)))
@@ -592,13 +629,14 @@ completion."
         ;; Approve from some other buffer.
         (with-temp-buffer
           (gent-approve))
-        (should-not (buffer-local-value 'gent--pending gent-buffer)))
+        (should-not (gent--pending-in-buffer gent-buffer)))
       (with-timeout (5 (error "Timed out"))
         (while (not done) (accept-process-output nil 0.05)))
       (should success)
       (should (equal (gent-test--read-file "a.txt") "new\n"))
       (should (string-search "Done." output))
-      (should (equal (map-elt (nth 2 gent--messages) 'content) "Edited a.txt")))))
+      (should (equal (map-elt (nth 2 (gent--agent-state-messages (gent--agent))) 'content)
+                     "Edited a.txt")))))
 
 (ert-deftest gent-test-loop-reject-with-note ()
   (gent-test--with-project
@@ -620,7 +658,7 @@ completion."
         (gent-reject "use y instead")
         (with-timeout (5 (error "Timed out"))
           (while (not done) (accept-process-output nil 0.05)))
-        (setq tool-message (nth 2 gent--messages)))
+        (setq tool-message (nth 2 (gent--agent-state-messages (gent--agent)))))
       (should (string-search "use y instead" (map-elt tool-message 'content))))))
 
 (ert-deftest gent-test-interrupt-clears-pending ()
@@ -630,8 +668,8 @@ completion."
           `((nil ,(gent-test--tool-call "c1" "run_shell" '((command . "touch x")))))
           "touch"
         (gent-interrupt)
-        (should-not gent--pending)
-        (should (equal (map-elt (car (last gent--messages)) 'content)
+        (should-not (gent--agent-state-pending (gent--agent)))
+        (should (equal (map-elt (car (last (gent--agent-state-messages (gent--agent)))) 'content)
                        "Cancelled by the user."))
         (should-error (gent-approve) :type 'user-error)
         ;; The interrupted turn never finishes on its own.
@@ -658,11 +696,15 @@ completion."
           (while (not done) (accept-process-output nil 0.05))
           ;; One visible header, then hidden reasoning, then the answer.
           (should (string-match "Reasoning.*\n\\(Let me think\\.\n\n\\)Answer\\.\\'" output))
-          (should (eq (get-text-property (match-beginning 1) 'invisible output) 'gent-details))
-          (should-not (get-text-property (match-beginning 0) 'invisible output))
-          (should-not (get-text-property (match-end 1) 'invisible output))
-          ;; Reasoning is not kept in the conversation.
-          (should (equal (map-elt (car (last gent--messages)) 'content) "Answer.")))))))
+          (should (get-text-property (match-beginning 1) 'gent-details output))
+          (should-not (get-text-property (match-beginning 0) 'gent-details output))
+          (should-not (get-text-property (match-end 1) 'gent-details output))
+          ;; Reasoning is stored separately from the answer for continuation.
+          (should (equal (map-elt (car (last (gent--agent-state-messages (gent--agent)))) 'content)
+                         "Answer."))
+          (should (equal (map-elt (car (last (gent--agent-state-messages (gent--agent))))
+                                 'reasoning_content)
+                         "Let me think.")))))))
 
 (ert-deftest gent-test-loop-iteration-limit ()
   (gent-test--with-project
@@ -706,10 +748,10 @@ completion."
            (list (cons :write-output #'ignore)
                  (cons :finish-output (lambda (_) (setq finished t)))))
           ;; Cancel before the fake response arrives.
-          (setq gent--turn (1+ gent--turn))
+          (cl-incf (gent--agent-state-turn (gent--agent)))
           (accept-process-output nil 0.1)
           (should-not finished)
-          (should (= (length gent--messages) 1)))))))
+          (should (= (length (gent--agent-state-messages (gent--agent))) 1)))))))
 
 ;;; Buffer
 
@@ -718,7 +760,7 @@ completion."
   (declare (indent 0))
   `(with-temp-buffer
      (gent-mode)
-     (setq gent--root default-directory)
+     (setf (gent--agent-state-root (gent--agent)) default-directory)
      (gent--draw nil)
      ,@body))
 
@@ -733,6 +775,257 @@ completion."
   (with-timeout (5 (error "Timed out waiting for the turn"))
     (while gent--busy
       (accept-process-output nil 0.05))))
+
+(ert-deftest gent-test-toggle-details-survives-fontification ()
+  (gent-test--with-gent-buffer
+    (let ((source (current-buffer)))
+      (gent--insert-output source (gent--format-reasoning-header))
+      (gent--insert-output source (gent--format-reasoning "Thinking "))
+      (gent--insert-output source (gent--format-reasoning "more.\n"))
+      (gent--insert-output source "Answer.\n")
+      (gent--insert-output source (gent--format-tool-result "Tool output."))
+      (insert "draft input")
+      (let ((reasoning (save-excursion (goto-char (point-min)) (search-forward "Thinking") (1- (point))))
+            (answer (save-excursion (goto-char (point-min)) (search-forward "Answer") (1- (point))))
+            (tool (save-excursion (goto-char (point-min)) (search-forward "Tool output") (1- (point))))
+            (input gent--input-marker)
+            (toggle (key-binding (kbd "C-c C-t"))))
+        (should (eq toggle #'gent-toggle-details))
+        ;; Exercise Markdown's removal of managed text properties explicitly,
+        ;; even when batch mode has not enabled font-lock automatically.
+        (let ((inhibit-read-only t))
+          (font-lock-unfontify-region (point-min) (point-max))
+          (font-lock-ensure))
+        (dotimes (_ 2)
+          (should (invisible-p reasoning))
+          (should (invisible-p tool))
+          (should-not (invisible-p answer))
+          (should-not (invisible-p input))
+          (call-interactively toggle)
+          (should-not (invisible-p reasoning))
+          (should-not (invisible-p tool))
+          (call-interactively toggle))
+        ;; New output obeys the visibility setting, and adjacent visible text
+        ;; never becomes part of a reasoning overlay.
+        (call-interactively toggle)
+        (gent--insert-output source (gent--format-reasoning "Later reasoning.\n"))
+        (gent--insert-output source "Later answer.\n")
+        (goto-char (point-min))
+        (search-forward "Later reasoning")
+        (should-not (invisible-p (1- (point))))
+        (call-interactively toggle)
+        (should (invisible-p (1- (point))))
+        (search-forward "Later answer")
+        (should-not (invisible-p (1- (point))))
+        (should (equal (gent--input) "draft input"))))))
+
+(ert-deftest gent-test-dry-run-matches-send-without-side-effects ()
+  (gent-test--with-project
+    (gent-test--write-file "AGENTS.md" "Include these project instructions.")
+    (let* ((gent-llm-default-backend
+            (gent-make-openai-backend
+             :model "preview-model" :url-base "https://example.test/v1"
+             :reasoning-effort "high" :max-tokens 123 :temperature 0.5
+             :session-id-header "x-session"
+             :api-key (lambda () (ert-fail "Preview resolved API credentials"))
+             :headers (lambda () (ert-fail "Preview resolved HTTP headers"))))
+           (gent-context-keep-tool-results 0)
+           (preview nil)
+           (sent nil))
+      (unwind-protect
+          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) buffer))
+                    ((symbol-function 'gent-llm-chat)
+                     (lambda (&rest args) (setq sent args) nil))
+                    ((symbol-function 'gent-tools-call)
+                     (lambda (&rest _) (ert-fail "Preview executed a tool"))))
+            (gent-test--with-gent-buffer
+              (setq-local gent-context-max-tokens 100)
+              (let* ((agent (gent--agent))
+                     (messages
+                      `(((role . "assistant") (content . "")
+                         (tool_calls . [((id . "old-call")
+                                         (function . ((name . "read_file")
+                                                      (arguments . "{}"))))]))
+                        ((role . "tool") (tool_call_id . "old-call")
+                         (content . ,(make-string 1000 ?x)))
+                        ((role . "assistant") (content . "")
+                         (tool_calls . [((id . "missing-call")
+                                         (function . ((name . "read_file")
+                                                      (arguments . "{}"))))]))))
+                     (snapshot (copy-tree messages t)))
+                (setf (gent--agent-state-messages agent) messages)
+                (insert "  proposed prompt \n")
+                (ring-insert gent--history "previous prompt")
+                (setq gent--history-index 0)
+                (let ((text (buffer-string))
+                      (point-before (point))
+                      (modified (buffer-modified-p))
+                      (undo buffer-undo-list)
+                      (history (ring-elements gent--history)))
+                  (setq preview (gent-send-dry-run))
+                  (should-not sent)
+                  (should (eq messages (gent--agent-state-messages agent)))
+                  (should (equal snapshot messages))
+                  (should (equal (buffer-string) text))
+                  (should (= (point) point-before))
+                  (should (eq modified (buffer-modified-p)))
+                  (should (eq undo buffer-undo-list))
+                  (should (equal history (ring-elements gent--history)))
+                  (should (= gent--history-index 0))
+                  (should-not gent--busy)
+                  (should-not gent--queue)
+                  (should-not (gent--agent-state-session-id agent))
+                  (should-not (gent--agent-state-request-process agent))
+                  (should (= (gent--agent-state-turn agent) 0)))
+                (let ((payload
+                       (with-current-buffer preview
+                         (should (derived-mode-p 'gent-dry-run-mode))
+                         (should buffer-read-only)
+                         (should-not (buffer-modified-p))
+                         (should (string-search "old-call" (buffer-string)))
+                         (should (string-search "Estimated context:" (buffer-string)))
+                         (should (string-search "tokens / 100 budget" (buffer-string)))
+                         (should (string-search "generated when sent" (buffer-string)))
+                         (goto-char (point-min))
+                         (search-forward "\nRequest body\n\n")
+                         (gent-llm--json-parse-string
+                          (buffer-substring-no-properties (point) (point-max))))))
+                  (gent-send)
+                  (should sent)
+                  (should (equal (map-elt payload 'messages)
+                                 (gent-llm--normalize-messages
+                                  (plist-get sent :messages) nil)))
+                  (should (equal (map-elt payload 'tools)
+                                 (vconcat (plist-get sent :tools))))
+                  (should (equal (map-elt payload 'model) "preview-model"))
+                  (should (= (map-elt payload 'max_tokens) 123))
+                  (should (= (map-elt payload 'temperature) 0.5))
+                  (should (equal (map-elt payload 'reasoning_effort) "high"))
+                  (should (string-search "Include these project instructions."
+                                         (map-elt (aref (map-elt payload 'messages) 0)
+                                                  'content)))
+                  (should (equal (map-elt (car (last (plist-get sent :messages))) 'content)
+                                 "proposed prompt"))
+                  (should (cl-find gent--elided (plist-get sent :messages)
+                                   :key (lambda (m) (map-elt m 'content)) :test #'equal))
+                  (should (cl-find "missing-call" (plist-get sent :messages)
+                                   :key (lambda (m) (map-elt m 'tool_call_id))
+                                   :test #'equal))))))
+        (when (buffer-live-p preview) (kill-buffer preview))))))
+
+(ert-deftest gent-test-dry-run-refresh-and-generic-backend ()
+  (gent-test--with-project
+    (let ((gent-llm-default-backend (make-gent-test-backend))
+          (preview nil))
+      (unwind-protect
+          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) buffer)))
+            (gent-test--with-gent-buffer
+              (let ((source (current-buffer)))
+                (setf (gent--agent-state-session-id (gent--agent)) "existing-id")
+                (insert "first preview")
+                (setq preview (gent-send-dry-run))
+                (should (eq (keymap-lookup gent-mode-map "C-c C-d") #'gent-send-dry-run))
+                (gent--set-input "updated preview")
+                (with-current-buffer preview
+                  (should (eq gent--dry-run-source source))
+                  (should (eq (keymap-lookup (current-local-map) "g") #'gent-dry-run-refresh))
+                  (should (eq (keymap-lookup (current-local-map) "q") #'quit-window))
+                  (should (string-search "existing-id" (buffer-string)))
+                  (should (string-search "does not provide a wire preview" (buffer-string)))
+                  (gent-dry-run-refresh)
+                  (should (string-search "updated preview" (buffer-string)))
+                  (should-not (string-search "first preview" (buffer-string))))))
+            ;; Refresh also handles a source buffer that has been killed.
+            (with-current-buffer preview
+              (should-error (gent-dry-run-refresh) :type 'user-error)))
+        (when (buffer-live-p preview) (kill-buffer preview))))))
+
+(ert-deftest gent-test-dry-run-rejects-unavailable-input ()
+  (with-temp-buffer
+    (should-error (gent-send-dry-run) :type 'user-error))
+  (gent-test--with-gent-buffer
+    (insert " \n ")
+    (should-error (gent-send-dry-run) :type 'user-error)
+    (gent--set-input "preview me")
+    (let ((gent--busy t))
+      (should-error (gent-send-dry-run) :type 'user-error))
+    (setf (gent--agent-state-pending (gent--agent)) '(:name "edit_file"))
+    (should-error (gent-send-dry-run) :type 'user-error)
+    (setf (gent--agent-state-pending (gent--agent)) nil)
+    (let ((gent--queue '("queued prompt")))
+      (should-error (gent-send-dry-run) :type 'user-error))
+    (should (equal (gent--input) "preview me"))))
+
+(ert-deftest gent-test-backend-preview-excludes-authentication ()
+  (let* ((backend (gent-make-openai-backend
+                   :url-base "https://example.test/v1" :model "model"
+                   :api-key "private-key" :headers '("X-Custom-Auth: private-header")))
+         (details (gent-llm-backend-preview
+                   backend '(((role . "user") (content . "hello"))) nil))
+         (text (prin1-to-string details)))
+    (should (equal (map-elt details 'endpoint) "https://example.test/v1/chat/completions"))
+    (should (equal (map-elt (map-elt details 'payload) 'model) "model"))
+    (should-not (string-search "private-key" text))
+    (should-not (string-search "private-header" text))))
+
+(ert-deftest gent-test-agent-state-buffer-isolation ()
+  (with-temp-buffer
+    (should-not gent--agent)
+    (should-not (gent--live-p (current-buffer) 0))
+    (should-not (memq (current-buffer) (gent--pending-buffers)))
+    (should-not gent--agent)
+    (gent-mode)
+    (let ((first (gent--agent)))
+      (setf (gent--agent-state-root first) default-directory
+            (gent--agent-state-messages first) '(((role . "user") (content . "first"))))
+      (with-temp-buffer
+        (gent-mode)
+        (should-not (eq (gent--agent) first))
+        (should-not (gent--agent-state-messages (gent--agent)))
+        (gent--append '((role . "user") (content . "second"))))
+      (should (eq (gent--agent) first))
+      (should (equal (gent--agent-state-messages first)
+                     '(((role . "user") (content . "first"))))))))
+
+(ert-deftest gent-test-agent-state-reset-rejects-stale-callbacks ()
+  (let ((gent-backends (list (cons "local" (make-gent-test-backend))))
+        (requests nil))
+    (cl-letf (((symbol-function 'gent-llm-chat)
+               (lambda (&rest args) (push args requests) nil)))
+      (gent-test--with-gent-buffer
+        (gent-set-backend "local")
+        (gent-test--type "old")
+        (let* ((agent (gent--agent))
+               (backend (gent--agent-state-backend agent))
+               (root (gent--agent-state-root agent))
+               (turn (gent--agent-state-turn agent))
+               (session-id (gent--agent-state-session-id agent))
+               (old (car requests))
+               (process (make-pipe-process :name "gent-test-reset" :noquery t)))
+          (setf (gent--agent-state-request-process agent) process)
+          (gent-reset)
+          (should-not (process-live-p process))
+          (should (eq (gent--agent) agent))
+          (should (> (gent--agent-state-turn agent) turn))
+          (should-not (gent--live-p (current-buffer) turn))
+          (should-not (gent--agent-state-messages agent))
+          (should-not (gent--agent-state-session-id agent))
+          (should (eq (gent--agent-state-backend agent) backend))
+          (should (equal (gent--agent-state-backend-name agent) "local"))
+          (should (equal (gent--agent-state-root agent) root))
+          (gent-test--type "new")
+          (should-not (equal (gent--agent-state-session-id agent) session-id))
+          (funcall (plist-get old :on-token) "stale-token")
+          (funcall (plist-get old :on-done) "stale-answer")
+          (funcall (plist-get old :on-error) "stale-error")
+          (should gent--busy)
+          (should (equal (gent--agent-state-messages agent)
+                         '(((role . "user") (content . "new")))))
+          (should-not (string-search "stale-" (buffer-string)))
+          (funcall (plist-get (car requests) :on-done) "current")
+          (should-not gent--busy)
+          (should (equal (map-elt (car (last (gent--agent-state-messages agent))) 'content)
+                         "current")))))))
 
 (ert-deftest gent-test-conversation-session-lifecycle ()
   (gent-test--with-project
@@ -750,12 +1043,12 @@ completion."
                    (push (plist-get args :session-id) ids)
                    (apply fake args))))
         (gent-test--with-gent-buffer
-          (should-not gent--session-id)
+          (should-not (gent--agent-state-session-id (gent--agent)))
           (gent-test--type "read a.txt")
           (gent-test--wait-idle)
           (should (= (length ids) 2))
-          (should (stringp gent--session-id))
-          (should-not (string-empty-p gent--session-id))
+          (should (stringp (gent--agent-state-session-id (gent--agent))))
+          (should-not (string-empty-p (gent--agent-state-session-id (gent--agent))))
           (should (equal (car ids) (cadr ids)))
           (gent-set-backend "other")
           (gent-set-reasoning-effort "high")
@@ -767,11 +1060,13 @@ completion."
           (gent-test--type "continue")
           (gent-test--wait-idle)
           (should (= (length ids) 5))
-          (should (cl-every (lambda (id) (equal id gent--session-id)) ids))
+          (should (cl-every (lambda (id)
+                              (equal id (gent--agent-state-session-id (gent--agent))))
+                            ids))
           ;; Sharing the same backend does not share conversation IDs.
-          (setq gent--backend gent-llm-default-backend)
+          (setf (gent--agent-state-backend (gent--agent)) gent-llm-default-backend)
           (gent-reset)
-          (should-not gent--session-id)
+          (should-not (gent--agent-state-session-id (gent--agent)))
           (gent-test--type "new conversation")
           (gent-test--wait-idle)
           (should-not (equal (car ids) (cadr ids))))
@@ -784,16 +1079,20 @@ completion."
 (ert-deftest gent-test-batch-session-id ()
   (gent-test--with-project
     (let* ((ids nil)
+           (agents nil)
            (fake (gent-test--fake-chat (list '(("one") ("two"))) (list nil))))
       (cl-letf (((symbol-function 'gent-llm-chat)
                  (lambda (&rest args)
                    (push (plist-get args :session-id) ids)
+                   (push (gent--agent) agents)
                    (apply fake args))))
         (with-temp-buffer
           (let ((standard-output (current-buffer)))
             (gent-batch-run "first")
             (gent-batch-run "second"))))
       (should (= (length ids) 2))
+      (should (= (length agents) 2))
+      (should-not (eq (car agents) (cadr agents)))
       (should (cl-every (lambda (id) (and (stringp id) (not (string-empty-p id)))) ids))
       (should-not (equal (car ids) (cadr ids))))))
 
@@ -804,15 +1103,16 @@ completion."
          (gent-llm-default-backend go))
     (gent-test--with-gent-buffer
       (gent-set-backend "go")
-      (should-not (eq gent--backend go))
-      (let ((previous gent--backend))
+      (should-not (eq (gent--agent-state-backend (gent--agent)) go))
+      (let ((previous (gent--agent-state-backend (gent--agent))))
         (gent-set-backend "dumile")
-        (should-not (eq gent--backend dumile))
-        (should (equal gent--backend-name "dumile"))
-        (should (equal (gent-llm-backend-model gent--backend) "dumile-model"))
-        (should (equal (gent-openai--url gent--backend)
+        (should-not (eq (gent--agent-state-backend (gent--agent)) dumile))
+        (should (equal (gent--agent-state-backend-name (gent--agent)) "dumile"))
+        (should (equal (gent-llm-backend-model (gent--agent-state-backend (gent--agent)))
+                       "dumile-model"))
+        (should (equal (gent-openai--url (gent--agent-state-backend (gent--agent)))
                        "https://dumile.local/v1/chat/completions"))
-        (should (equal (gent-openai--headers gent--backend "session")
+        (should (equal (gent-openai--headers (gent--agent-state-backend (gent--agent)) "session")
                        '("Content-Type: application/json" "Authorization: Bearer dumile-key")))
         (should (equal (gent-llm-backend-model previous) "go-model"))
         (should (member "x-opencode-session: session"
@@ -822,8 +1122,8 @@ completion."
     (should (eq gent-llm-default-backend go))
     (should (equal (gent-llm-backend-model go) "go-model"))
     (gent-test--with-gent-buffer
-      (should-not gent--backend)
-      (should-not gent--backend-name)
+      (should-not (gent--agent-state-backend (gent--agent)))
+      (should-not (gent--agent-state-backend-name (gent--agent)))
       (should (eq (gent--current-backend) go)))))
 
 (ert-deftest gent-test-set-backend-interactive ()
@@ -842,16 +1142,16 @@ completion."
                    "local")))
         (call-interactively #'gent-set-backend))
       (should (= reads 1))
-      (should (equal (gent-llm-backend-model gent--backend) "m")))))
+      (should (equal (gent-llm-backend-model (gent--agent-state-backend (gent--agent))) "m")))))
 
 (ert-deftest gent-test-set-backend-invalid-selection ()
   (let ((gent-backends (list (cons "local" (make-gent-test-backend)))))
     (gent-test--with-gent-buffer
       (gent-set-backend "local")
-      (let ((previous gent--backend))
+      (let ((previous (gent--agent-state-backend (gent--agent))))
         (should-error (gent-set-backend "missing") :type 'user-error)
-        (should (eq gent--backend previous))
-        (should (equal gent--backend-name "local")))
+        (should (eq (gent--agent-state-backend (gent--agent)) previous))
+        (should (equal (gent--agent-state-backend-name (gent--agent)) "local")))
       (let ((gent-backends nil))
         (should-error (call-interactively #'gent-set-backend) :type 'user-error)))))
 
@@ -863,14 +1163,16 @@ completion."
           (gent-backends (list (cons "local" backend))))
       (gent-test--with-gent-buffer
         (gent-set-backend "local")
-        (should-not (eq gent--backend backend))
-        (should (equal (gent-llm-backend-model gent--backend) "original"))
-        (let ((previous gent--backend))
+        (should-not (eq (gent--agent-state-backend (gent--agent)) backend))
+        (should (equal (gent-llm-backend-model (gent--agent-state-backend (gent--agent))) "original"))
+        (let ((previous (gent--agent-state-backend (gent--agent))))
           (gent-set-reasoning-effort "high")
-          (should-not (eq gent--backend previous))
-          (should (equal (gent-llm-backend-reasoning-effort gent--backend) "high"))
+          (should-not (eq (gent--agent-state-backend (gent--agent)) previous))
+          (should (equal (gent-llm-backend-reasoning-effort
+                          (gent--agent-state-backend (gent--agent)))
+                         "high"))
           (should (equal (gent-llm-backend-reasoning-effort previous) "low")))
-        (should (equal (gent-llm-backend-model gent--backend) "original"))
+        (should (equal (gent-llm-backend-model (gent--agent-state-backend (gent--agent))) "original"))
         (should (equal (gent-llm-backend-model backend) "original"))
         (should (equal (gent-llm-backend-reasoning-effort backend) "low"))))))
 
@@ -889,7 +1191,8 @@ completion."
         (should (equal (gent--input) "next"))
         (should (get-text-property (point-min) 'read-only))
         (should-error (progn (goto-char (point-min)) (insert "x")) :type 'text-read-only)
-        (should (equal (mapcar (lambda (m) (map-elt m 'role)) gent--messages)
+        (should (equal (mapcar (lambda (m) (map-elt m 'role))
+                              (gent--agent-state-messages (gent--agent)))
                        '("user" "assistant")))))))
 
 (ert-deftest gent-test-buffer-queue ()
@@ -971,6 +1274,54 @@ Pass SESSION-ID as the conversation ID."
       (should (equal done "Hello"))
       (should (equal (map-elt (car calls) 'id) "c1"))
       (should-not error))))
+
+(ert-deftest gent-test-curl-tool-continuation-preserves-reasoning ()
+  (gent-test--with-project
+    (gent-test--write-file "a.txt" "hello")
+    (gent-test--with-fake-curl
+        (format
+         (concat "for arg do case \"$arg\" in @*) payload=${arg#@};; esac; done\n"
+                 "cat > /dev/null\n"
+                 "if grep -q '\"tool_call_id\":\"c1\"' \"$payload\"; then\n"
+                 "printf '%%s' '%s'\nelse\nprintf '%%s' '%s'\nfi\n")
+         (gent-test--sse '((content . "It says hello.")))
+         (gent-test--sse
+          '((reasoning_content . "Need to read "))
+          '((reasoning_content . "a.txt.\n"))
+          '((tool_calls . [((index . 0) (id . "c1") (type . "function")
+                            (function . ((name . "read_file")
+                                         (arguments . "{\"path\":\"a.txt\"}"))))]))))
+      (let* ((gent-llm-default-backend
+              (gent-make-openai-backend :model "m" :url-base "http://x"))
+             (write-payload (symbol-function 'gent-openai--write-payload))
+             (payloads nil))
+        (cl-letf (((symbol-function 'gent-openai--write-payload)
+                   (lambda (payload)
+                     ;; Inspect the JSON actually written for curl.
+                     (let ((file (funcall write-payload payload)))
+                       (with-temp-buffer
+                         (insert-file-contents file)
+                         (push (gent-llm--json-parse-string (buffer-string)) payloads))
+                       file))))
+          (gent-test--with-gent-buffer
+            (gent-test--type "read a.txt")
+            (gent-test--wait-idle)
+            (should (= (length payloads) 2))
+            (should-not (assq 'reasoning_content
+                              (aref (map-elt (cadr payloads) 'messages) 1)))
+            (let* ((messages (map-elt (car payloads) 'messages))
+                   (assistant (aref messages 2))
+                   (tool (aref messages 3)))
+              (should (equal (map-elt assistant 'role) "assistant"))
+              (should (equal (map-elt assistant 'content) ""))
+              (should (equal (map-elt assistant 'reasoning_content) "Need to read a.txt.\n"))
+              (should (equal (map-elt (aref (map-elt assistant 'tool_calls) 0) 'id) "c1"))
+              (should (equal (map-elt tool 'tool_call_id) "c1"))
+              (should (string-search "hello" (map-elt tool 'content))))
+            ;; Each response has its own reasoning accumulator.
+            (let ((answer (car (last (gent--agent-state-messages (gent--agent))))))
+              (should (equal (map-elt answer 'content) "It says hello."))
+              (should-not (assq 'reasoning_content answer)))))))))
 
 (ert-deftest gent-test-curl-config ()
   ;; The key goes through stdin, not the command line.
