@@ -18,4 +18,9 @@ table.insert(config.hyperlink_rules, {
   format = 'https://chromium-review.googlesource.com/c/chromium/src/+/$1',
 })
 
+-- Free ctrl+shift+space (default: QuickSelect) so it reaches terminal apps.
+config.keys = {
+  { key = 'Space', mods = 'CTRL|SHIFT', action = wezterm.action.DisableDefaultAssignment },
+}
+
 return config
