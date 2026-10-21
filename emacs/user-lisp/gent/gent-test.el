@@ -357,7 +357,7 @@ Approval requests go to `gent-test--confirm'."
     (with-temp-buffer
       (setq gent-session-current (make-gent-session
                                   :system-prompt '(("pirate" . "Be a pirate.")
-                                                   ("project" . gent--project-context))))
+                                                   ("project" . gent-project-context))))
       (let ((content (map-elt (gent--system-message default-directory) 'content)))
         (should (string-prefix-p "Be a pirate." content))
         (should-not (string-search "You are gent" content))

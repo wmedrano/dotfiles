@@ -9,49 +9,16 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'gent-prompt)
 (require 'gent-tools)
 
-(defcustom gent-project-instruction-files '("AGENTS.md")
-  "Files in the project root that are added to the system prompt."
-  :type '(repeat string)
-  :group 'gent)
-
-(defcustom gent-project-instructions-max-chars 20000
-  "Maximum characters read from each of `gent-project-instruction-files'."
-  :type 'integer
-  :group 'gent)
-
-(defconst gent-session-base-prompt
-  "You are gent, a coding agent running inside Emacs.  You help the user \
-understand and change the project they are working on.
-
-- Use the tools to look at the project before answering questions about it; \
-do not guess file contents.
-- Use run_shell with ls, find, rg or grep to explore, and read_file to read.
-- Make focused changes with edit_file.  Every change and command is shown to \
-the user, who may reject it; if they leave a note, follow it.
-- Keep answers short and concrete.  Refer to code as path:line."
-  "Instructions that open the default system prompt.")
-
-(defun gent--project-context (root)
-  "Return the project root and available tools for ROOT."
-  (format "Project root: %s\nAll relative paths are resolved against it.\nAvailable tools: %s"
-          root (string-join (gent-tools-names) ", ")))
-
-(defun gent--project-instructions (root)
-  "Return the contents of the instruction files found in ROOT, or nil."
-  (let ((parts
-         (delq nil
-               (mapcar
-                (lambda (name)
-                  (let ((file (expand-file-name name root)))
-                    (when (file-readable-p file)
-                      (with-temp-buffer
-                        (insert-file-contents file nil 0 gent-project-instructions-max-chars)
-                        (format "# %s\n\n%s" name (buffer-string))))))
-                gent-project-instruction-files))))
-    (when parts
-      (string-join parts "\n\n"))))
+(defconst gent-default-system-prompt
+  `(("base" . ,gent-base-prompt)
+    ("project" . gent-project-context)
+    ("instructions" . gent-project-instructions))
+  "Default value of the `system-prompt' slot of `gent-session'.
+Parts are combined as described in `gent-session-system-prompt-string'.
+Treat this as read-only; set the slot per session instead of mutating it.")
 
 (cl-defstruct gent-session
   "Conversation and execution state owned by one gent buffer."
@@ -61,9 +28,7 @@ the user, who may reject it; if they leave a note, follow it.
   (backend nil :documentation "Backend, or nil for `gent-llm-default-backend'.")
   (backend-name nil :documentation "Selected name in `gent-backends', or nil.")
   (system-prompt
-   `(("base" . ,gent-session-base-prompt)
-     ("project" . gent--project-context)
-     ("instructions" . gent--project-instructions))
+   (copy-tree gent-default-system-prompt)
    :documentation "System prompt parts as an alist of (NAME . PART).
 NAME is a descriptive string.  PART is a string, or a function called
 with the project root that returns a string or nil.  The non-empty parts
