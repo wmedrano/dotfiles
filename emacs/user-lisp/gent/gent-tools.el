@@ -338,14 +338,17 @@ cancel function, and DONE is not called afterwards."
 
 (defun gent-tools--resolve (path)
   "Return PATH expanded against `default-directory'.
-Signal an error if it falls outside `default-directory'."
+Signal an error if it falls outside the project root or /tmp."
   (unless (and (stringp path) (not (string-empty-p path)))
     (error "Missing `path'"))
-  (let* ((root (file-name-as-directory (expand-file-name default-directory)))
-         (file (expand-file-name path root)))
-    (unless (or (file-in-directory-p file root)
-                (string= (file-name-as-directory file) root))
-      (error "Path %s is outside the project root %s" path root))
+  (let* ((roots (list (file-name-as-directory (expand-file-name default-directory))
+                      "/tmp/"))
+         (file (expand-file-name path (car roots))))
+    (unless (cl-some (lambda (root)
+                       (or (file-in-directory-p file root)
+                           (string= (file-name-as-directory file) root)))
+                     roots)
+      (error "Path %s is outside the allowed directories" path))
     file))
 
 (defun gent-tools--relative (file)
@@ -364,6 +367,13 @@ Signal an error if it falls outside `default-directory'."
     (when (and buffer (buffer-modified-p buffer))
       (error "%s has unsaved changes in buffer %s; ask the user to save it first"
              (gent-tools--relative file) (buffer-name buffer)))))
+
+(defun gent-tools--check-scope (path)
+  "Resolve PATH and verify no buffer visiting it has unsaved changes.
+Return the expanded file path."
+  (let ((file (gent-tools--resolve path)))
+    (gent-tools--check-buffer file)
+    file))
 
 (defun gent-tools--write (file content)
   "Write CONTENT to FILE and refresh any buffer visiting it."
@@ -469,11 +479,10 @@ line number and a tab; the prefix is not part of the file.  Use `offset' and \
 
 (defun gent-tools--edit-new-content (args)
   "Return (FILE OLD-CONTENT NEW-CONTENT) for the edit described by ARGS."
-  (let* ((file (gent-tools--resolve (map-elt args 'path))))
+  (let ((file (gent-tools--check-scope (map-elt args 'path))))
     (unless (file-regular-p file)
       (error "%s does not exist; use write_file to create it"
              (gent-tools--relative file)))
-    (gent-tools--check-buffer file)
     (let ((old (gent-tools--file-string file)))
       (list file old (gent-tools--replace old (map-elt args 'old_string)
                                           (map-elt args 'new_string))))))
@@ -504,8 +513,7 @@ Prefer edit_file for changes to existing files."
  :args '((path :type string :description "Path relative to the project root")
          (content :type string :description "The complete new file contents"))
  :preview (lambda (args)
-            (let ((file (gent-tools--resolve (map-elt args 'path))))
-              (gent-tools--check-buffer file)
+            (let ((file (gent-tools--check-scope (map-elt args 'path))))
               (cons 'diff (gent-tools--diff
                            file
                            (and (file-regular-p file) (gent-tools--file-string file))
