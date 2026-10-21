@@ -771,7 +771,7 @@ Return (SUCCESS OUTPUT MESSAGES REQUESTS)."
     (cl-letf (((symbol-function 'gent-llm-chat)
                (gent-test--fake-chat queue requests)))
       (with-temp-buffer
-        (setq gent--current-session (make-gent--session :root default-directory))
+        (setq gent--current-session (make-gent-session :root default-directory))
         (gent--start-turn
          (current-buffer) prompt
          (list (cons :write-output (lambda (text &optional _) (setq output (concat output text))))
@@ -780,7 +780,7 @@ Return (SUCCESS OUTPUT MESSAGES REQUESTS)."
                                       (setq success ok done t)))))
         (while (not done)
           (accept-process-output nil 0.05))
-        (list success output (gent--session-messages gent--current-session) (reverse (car requests)))))))
+        (list success output (gent-session-messages gent--current-session) (reverse (car requests)))))))
 
 (defun gent-test--tool-call (id name args)
   "Return a tool call with ID to NAME with ARGS."
@@ -828,7 +828,7 @@ completion."
      (cl-letf (((symbol-function 'gent-llm-chat)
                 (gent-test--fake-chat (list ,responses) requests)))
        (with-temp-buffer
-         (setq gent--current-session (make-gent--session :root default-directory))
+         (setq gent--current-session (make-gent-session :root default-directory))
          (gent--start-turn
           (current-buffer) ,prompt
           (list (cons :write-output (lambda (text &optional _) (setq output (concat output text))))
@@ -872,7 +872,7 @@ completion."
       (should success)
       (should (equal (gent-test--read-file "a.txt") "new\n"))
       (should (string-search "Done." output))
-      (should (equal (map-elt (nth 2 (gent--session-messages gent--current-session)) 'content)
+      (should (equal (map-elt (nth 2 (gent-session-messages gent--current-session)) 'content)
                      "Edited a.txt")))))
 
 (ert-deftest gent-test-loop-reject-with-note ()
@@ -895,7 +895,7 @@ completion."
         (gent-reject "use y instead")
         (with-timeout (5 (error "Timed out"))
           (while (not done) (accept-process-output nil 0.05)))
-        (setq tool-message (nth 2 (gent--session-messages gent--current-session))))
+        (setq tool-message (nth 2 (gent-session-messages gent--current-session))))
       (should (string-search "use y instead" (map-elt tool-message 'content))))))
 
 (ert-deftest gent-test-interrupt-clears-pending ()
@@ -906,7 +906,7 @@ completion."
           "touch"
         (gent-interrupt)
         (should-not (gent--session-pending gent--current-session))
-        (should (equal (map-elt (car (last (gent--session-messages gent--current-session))) 'content)
+        (should (equal (map-elt (car (last (gent-session-messages gent--current-session))) 'content)
                        "Cancelled by the user."))
         (should-error (gent-approve) :type 'user-error)
         ;; The interrupted turn never finishes on its own.
@@ -921,11 +921,11 @@ completion."
           "sleep"
         (gent-approve)
         (should (gent-test--shell-processes "sleep 5"))
-        (should (gent--session-tool-cancel gent--current-session))
+        (should (gent-session-tool-cancel gent--current-session))
         (gent-interrupt)
         (should-not (gent-test--shell-processes "sleep 5"))
-        (should-not (gent--session-tool-cancel gent--current-session))
-        (should (equal (map-elt (car (last (gent--session-messages gent--current-session))) 'content)
+        (should-not (gent-session-tool-cancel gent--current-session))
+        (should (equal (map-elt (car (last (gent-session-messages gent--current-session))) 'content)
                        "Cancelled by the user."))
         ;; The interrupted turn never finishes on its own.
         (setq done t)))))
@@ -942,7 +942,7 @@ completion."
                                 (funcall (plist-get args :on-done) "Answer.")))
                  nil)))
       (with-temp-buffer
-        (setq gent--current-session (make-gent--session))
+        (setq gent--current-session (make-gent-session))
         (let ((done nil) (output ""))
           (gent--start-turn
            (current-buffer) "hi"
@@ -955,9 +955,9 @@ completion."
           (should-not (get-text-property (match-beginning 0) 'gent-details output))
           (should-not (get-text-property (match-end 1) 'gent-details output))
           ;; Reasoning is stored separately from the answer for continuation.
-          (should (equal (map-elt (car (last (gent--session-messages gent--current-session))) 'content)
+          (should (equal (map-elt (car (last (gent-session-messages gent--current-session))) 'content)
                          "Answer."))
-          (should (equal (map-elt (car (last (gent--session-messages gent--current-session)))
+          (should (equal (map-elt (car (last (gent-session-messages gent--current-session)))
                                  'reasoning_content)
                          "Let me think.")))))))
 
@@ -983,7 +983,7 @@ completion."
                  (run-at-time 0 nil (plist-get args :on-error) "boom")
                  nil)))
       (with-temp-buffer
-        (setq gent--current-session (make-gent--session))
+        (setq gent--current-session (make-gent-session))
         (let ((done nil) (success t) (output ""))
           (gent--start-turn
            (current-buffer) "hi"
@@ -1000,16 +1000,16 @@ completion."
       (cl-letf (((symbol-function 'gent-llm-chat)
                  (gent-test--fake-chat (list '(("late"))) (list nil))))
         (with-temp-buffer
-          (setq gent--current-session (make-gent--session))
+          (setq gent--current-session (make-gent-session))
           (gent--start-turn
            (current-buffer) "hi"
            (list (cons :write-output #'ignore)
                  (cons :finish-output (lambda (_) (setq finished t)))))
           ;; Cancel before the fake response arrives.
-          (cl-incf (gent--session-turn gent--current-session))
+          (cl-incf (gent-session-turn gent--current-session))
           (accept-process-output nil 0.1)
           (should-not finished)
-          (should (= (length (gent--session-messages gent--current-session)) 1)))))))
+          (should (= (length (gent-session-messages gent--current-session)) 1)))))))
 
 ;;; Buffer
 
@@ -1018,7 +1018,7 @@ completion."
   (declare (indent 0))
   `(with-temp-buffer
      (gent-mode)
-     (setf (gent--session-root gent--current-session) default-directory)
+     (setf (gent-session-root gent--current-session) default-directory)
      (gent--draw nil)
      ,@body))
 
@@ -1111,7 +1111,7 @@ completion."
                                          (function . ((name . "read_file")
                                                       (arguments . "{}"))))]))))
                      (snapshot (copy-tree messages t)))
-                (setf (gent--session-messages session) messages)
+                (setf (gent-session-messages session) messages)
                 (insert "  proposed prompt \n")
                 (ring-insert gent--history "previous prompt")
                 (setq gent--history-index 0)
@@ -1122,7 +1122,7 @@ completion."
                       (history (ring-elements gent--history)))
                   (setq preview (gent-send-dry-run))
                   (should-not sent)
-                  (should (eq messages (gent--session-messages session)))
+                  (should (eq messages (gent-session-messages session)))
                   (should (equal snapshot messages))
                   (should (equal (buffer-string) text))
                   (should (= (point) point-before))
@@ -1131,10 +1131,10 @@ completion."
                   (should (equal history (ring-elements gent--history)))
                   (should (= gent--history-index 0))
                   (should (eq (gent--state) 'idle))
-                  (should-not (gent--session-queue session))
-                  (should-not (gent--session-id session))
-                  (should-not (gent--session-request-process session))
-                  (should (= (gent--session-turn session) 0)))
+                  (should-not (gent-session-queue session))
+                  (should-not (gent-session-id session))
+                  (should-not (gent-session-request-process session))
+                  (should (= (gent-session-turn session) 0)))
                 (let ((payload
                        (with-current-buffer preview
                          (should (derived-mode-p 'gent-dry-run-mode))
@@ -1180,7 +1180,7 @@ completion."
           (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) buffer)))
             (gent-test--with-gent-buffer
               (let ((source (current-buffer)))
-                (setf (gent--session-id gent--current-session) "existing-id")
+                (setf (gent-session-id gent--current-session) "existing-id")
                 (insert "first preview")
                 (setq preview (gent-send-dry-run))
                 (should (eq (keymap-lookup gent-mode-map "C-c C-d") #'gent-send-dry-run))
@@ -1211,7 +1211,7 @@ completion."
     (gent--transition 'await-approval '(:name "edit_file"))
     (should-error (gent-send-dry-run) :type 'user-error)
     (gent--transition 'interrupt)
-    (setf (gent--session-queue gent--current-session) '("queued prompt"))
+    (setf (gent-session-queue gent--current-session) '("queued prompt"))
     (should-error (gent-send-dry-run) :type 'user-error)
     (should (equal (gent--input) "preview me"))))
 
@@ -1235,15 +1235,15 @@ completion."
     (should-not gent--current-session)
     (gent-mode)
     (let ((first gent--current-session))
-      (setf (gent--session-root first) default-directory
-            (gent--session-messages first) '(((role . "user") (content . "first"))))
+      (setf (gent-session-root first) default-directory
+            (gent-session-messages first) '(((role . "user") (content . "first"))))
       (with-temp-buffer
         (gent-mode)
         (should-not (eq gent--current-session first))
-        (should-not (gent--session-messages gent--current-session))
+        (should-not (gent-session-messages gent--current-session))
         (gent--append '((role . "user") (content . "second"))))
       (should (eq gent--current-session first))
-      (should (equal (gent--session-messages first)
+      (should (equal (gent-session-messages first)
                      '(((role . "user") (content . "first"))))))))
 
 (ert-deftest gent-test-session-reset-rejects-stale-callbacks ()
@@ -1255,35 +1255,35 @@ completion."
         (gent-set-backend "local")
         (gent-test--type "old")
         (let* ((session gent--current-session)
-               (backend (gent--session-backend session))
-               (root (gent--session-root session))
-               (turn (gent--session-turn session))
-               (session-id (gent--session-id session))
+               (backend (gent-session-backend session))
+               (root (gent-session-root session))
+               (turn (gent-session-turn session))
+               (session-id (gent-session-id session))
                (old (car requests))
                (process (make-pipe-process :name "gent-test-reset" :noquery t)))
-          (setf (gent--session-request-process session) process)
+          (setf (gent-session-request-process session) process)
           (gent-reset t)
           (should-not (process-live-p process))
           (should (eq gent--current-session session))
-          (should (> (gent--session-turn session) turn))
+          (should (> (gent-session-turn session) turn))
           (should-not (gent--live-p (current-buffer) turn))
-          (should-not (gent--session-messages session))
-          (should-not (gent--session-id session))
-          (should (eq (gent--session-backend session) backend))
-          (should (equal (gent--session-backend-name session) "local"))
-          (should (equal (gent--session-root session) root))
+          (should-not (gent-session-messages session))
+          (should-not (gent-session-id session))
+          (should (eq (gent-session-backend session) backend))
+          (should (equal (gent-session-backend-name session) "local"))
+          (should (equal (gent-session-root session) root))
           (gent-test--type "new")
-          (should-not (equal (gent--session-id session) session-id))
+          (should-not (equal (gent-session-id session) session-id))
           (funcall (plist-get old :on-token) "stale-token")
           (funcall (plist-get old :on-done) "stale-answer")
           (funcall (plist-get old :on-error) "stale-error")
           (should (eq (gent--state) 'running))
-          (should (equal (gent--session-messages session)
+          (should (equal (gent-session-messages session)
                          '(((role . "user") (content . "new")))))
           (should-not (string-search "stale-" (buffer-string)))
           (funcall (plist-get (car requests) :on-done) "current")
           (should (eq (gent--state) 'idle))
-          (should (equal (map-elt (car (last (gent--session-messages session))) 'content)
+          (should (equal (map-elt (car (last (gent-session-messages session))) 'content)
                          "current")))))))
 
 (ert-deftest gent-test-conversation-session-lifecycle ()
@@ -1302,12 +1302,12 @@ completion."
                    (push (plist-get args :session-id) ids)
                    (apply fake args))))
         (gent-test--with-gent-buffer
-          (should-not (gent--session-id gent--current-session))
+          (should-not (gent-session-id gent--current-session))
           (gent-test--type "read a.txt")
           (gent-test--wait-idle)
           (should (= (length ids) 2))
-          (should (stringp (gent--session-id gent--current-session)))
-          (should-not (string-empty-p (gent--session-id gent--current-session)))
+          (should (stringp (gent-session-id gent--current-session)))
+          (should-not (string-empty-p (gent-session-id gent--current-session)))
           (should (equal (car ids) (cadr ids)))
           (gent-set-backend "other")
           (gent-set-reasoning-effort "high")
@@ -1320,12 +1320,12 @@ completion."
           (gent-test--wait-idle)
           (should (= (length ids) 5))
           (should (cl-every (lambda (id)
-                              (equal id (gent--session-id gent--current-session)))
+                              (equal id (gent-session-id gent--current-session)))
                             ids))
           ;; Sharing the same backend does not share conversation IDs.
-          (setf (gent--session-backend gent--current-session) gent-llm-default-backend)
+          (setf (gent-session-backend gent--current-session) gent-llm-default-backend)
           (gent-reset t)
-          (should-not (gent--session-id gent--current-session))
+          (should-not (gent-session-id gent--current-session))
           (gent-test--type "new conversation")
           (gent-test--wait-idle)
           (should-not (equal (car ids) (cadr ids))))
@@ -1362,16 +1362,16 @@ completion."
          (gent-llm-default-backend go))
     (gent-test--with-gent-buffer
       (gent-set-backend "go")
-      (should-not (eq (gent--session-backend gent--current-session) go))
-      (let ((previous (gent--session-backend gent--current-session)))
+      (should-not (eq (gent-session-backend gent--current-session) go))
+      (let ((previous (gent-session-backend gent--current-session)))
         (gent-set-backend "dumile")
-        (should-not (eq (gent--session-backend gent--current-session) dumile))
-        (should (equal (gent--session-backend-name gent--current-session) "dumile"))
-        (should (equal (gent-llm-backend-model (gent--session-backend gent--current-session))
+        (should-not (eq (gent-session-backend gent--current-session) dumile))
+        (should (equal (gent-session-backend-name gent--current-session) "dumile"))
+        (should (equal (gent-llm-backend-model (gent-session-backend gent--current-session))
                        "dumile-model"))
-        (should (equal (gent-openai--url (gent--session-backend gent--current-session))
+        (should (equal (gent-openai--url (gent-session-backend gent--current-session))
                        "https://dumile.local/v1/chat/completions"))
-        (should (equal (gent-openai--headers (gent--session-backend gent--current-session) "session")
+        (should (equal (gent-openai--headers (gent-session-backend gent--current-session) "session")
                        '("Content-Type: application/json" "Authorization: Bearer dumile-key")))
         (should (equal (gent-llm-backend-model previous) "go-model"))
         (should (member "x-opencode-session: session"
@@ -1381,8 +1381,8 @@ completion."
     (should (eq gent-llm-default-backend go))
     (should (equal (gent-llm-backend-model go) "go-model"))
     (gent-test--with-gent-buffer
-      (should-not (gent--session-backend gent--current-session))
-      (should-not (gent--session-backend-name gent--current-session))
+      (should-not (gent-session-backend gent--current-session))
+      (should-not (gent-session-backend-name gent--current-session))
       (should (eq (gent--current-backend) go)))))
 
 (ert-deftest gent-test-set-backend-interactive ()
@@ -1401,16 +1401,16 @@ completion."
                    "local")))
         (call-interactively #'gent-set-backend))
       (should (= reads 1))
-      (should (equal (gent-llm-backend-model (gent--session-backend gent--current-session)) "m")))))
+      (should (equal (gent-llm-backend-model (gent-session-backend gent--current-session)) "m")))))
 
 (ert-deftest gent-test-set-backend-invalid-selection ()
   (let ((gent-backends (list (cons "local" (make-gent-test-backend)))))
     (gent-test--with-gent-buffer
       (gent-set-backend "local")
-      (let ((previous (gent--session-backend gent--current-session)))
+      (let ((previous (gent-session-backend gent--current-session)))
         (should-error (gent-set-backend "missing") :type 'user-error)
-        (should (eq (gent--session-backend gent--current-session) previous))
-        (should (equal (gent--session-backend-name gent--current-session) "local")))
+        (should (eq (gent-session-backend gent--current-session) previous))
+        (should (equal (gent-session-backend-name gent--current-session) "local")))
       (let ((gent-backends nil))
         (should-error (call-interactively #'gent-set-backend) :type 'user-error)))))
 
@@ -1422,16 +1422,16 @@ completion."
           (gent-backends (list (cons "local" backend))))
       (gent-test--with-gent-buffer
         (gent-set-backend "local")
-        (should-not (eq (gent--session-backend gent--current-session) backend))
-        (should (equal (gent-llm-backend-model (gent--session-backend gent--current-session)) "original"))
-        (let ((previous (gent--session-backend gent--current-session)))
+        (should-not (eq (gent-session-backend gent--current-session) backend))
+        (should (equal (gent-llm-backend-model (gent-session-backend gent--current-session)) "original"))
+        (let ((previous (gent-session-backend gent--current-session)))
           (gent-set-reasoning-effort "high")
-          (should-not (eq (gent--session-backend gent--current-session) previous))
+          (should-not (eq (gent-session-backend gent--current-session) previous))
           (should (equal (gent-llm-backend-reasoning-effort
-                          (gent--session-backend gent--current-session))
+                          (gent-session-backend gent--current-session))
                          "high"))
           (should (equal (gent-llm-backend-reasoning-effort previous) "low")))
-        (should (equal (gent-llm-backend-model (gent--session-backend gent--current-session)) "original"))
+        (should (equal (gent-llm-backend-model (gent-session-backend gent--current-session)) "original"))
         (should (equal (gent-llm-backend-model backend) "original"))
         (should (equal (gent-llm-backend-reasoning-effort backend) "low"))))))
 
@@ -1443,8 +1443,8 @@ completion."
                       ((awaiting-approval :name "edit_file")
                        gent-approval-face "Approval needed")))
         (pcase-let ((`(,state ,face ,label) case))
-          (setf (gent--session-state gent--current-session) state
-                (gent--session-queue gent--current-session) '("next"))
+          (setf (gent-session-state gent--current-session) state
+                (gent-session-queue gent--current-session) '("next"))
           (let ((header (gent--header-line))
                 (details (gent--header-details)))
             (should (string-prefix-p "   ████   gent · " header))
@@ -1464,13 +1464,13 @@ completion."
       (should (equal header-line-format '(:eval (gent--header-details))))
       (should (local-variable-p 'face-remapping-alist))
       (should (equal (alist-get 'tab-line face-remapping-alist) '(header-line)))
-      (setf (gent--session-root gent--current-session) "/tmp/gent-project/")
+      (setf (gent-session-root gent--current-session) "/tmp/gent-project/")
       (let ((header (gent--header-line))
             (details (gent--header-details)))
         (should (string-search "gent · gent-project" header))
         (should (string-search "Model: No backend" details))
         (should (string-search "Reasoning: default" details)))
-      (setf (gent--session-backend gent--current-session)
+      (setf (gent-session-backend gent--current-session)
             (make-gent-test-backend :model-id "test-model" :effort "high"))
       (let* ((details (gent--header-details))
              (model-pos (string-search "test-model" details))
@@ -1500,7 +1500,7 @@ completion."
         (should (get-text-property (point-min) 'read-only))
         (should-error (progn (goto-char (point-min)) (insert "x")) :type 'text-read-only)
         (should (equal (mapcar (lambda (m) (map-elt m 'role))
-                              (gent--session-messages gent--current-session))
+                              (gent-session-messages gent--current-session))
                        '("user" "assistant")))))))
 
 (ert-deftest gent-test-buffer-queue ()
@@ -1511,9 +1511,9 @@ completion."
         (gent-test--with-gent-buffer
           (gent-test--type "first")
           (gent-test--type "second")
-          (should (equal (gent--session-queue gent--current-session) '("second")))
+          (should (equal (gent-session-queue gent--current-session) '("second")))
           (gent-test--wait-idle)
-          (should-not (gent--session-queue gent--current-session))
+          (should-not (gent-session-queue gent--current-session))
           (should (= (length (car requests)) 2))
           (should (string-match-p "first\n\none\n\ngent> second\n\ntwo"
                                   (buffer-substring-no-properties (point-min) gent--output-marker))))))))
@@ -1540,7 +1540,7 @@ completion."
             (should (eq (gent--state) 'awaiting-approval))
             (should (string-search "Approval needed" (gent--header-line)))
             (gent-test--type "next")
-            (should (equal (gent--session-queue gent--current-session) '("next")))
+            (should (equal (gent-session-queue gent--current-session) '("next")))
             (should (= (length (car requests)) 1))
             (should (equal (gent-test--read-file "a.txt") "old"))
             (gent--answer (current-buffer) answer)
@@ -1548,7 +1548,7 @@ completion."
             (should-not (gent--session-pending gent--current-session))
             (should (string-search "Working" (gent--header-line)))
             (gent-test--wait-idle)
-            (should-not (gent--session-queue gent--current-session))
+            (should-not (gent-session-queue gent--current-session))
             (should (= (length (car requests)) 3))
             (should (string-search "Ready" (gent--header-line)))
             (should (equal (gent-test--read-file "a.txt")
@@ -1556,7 +1556,7 @@ completion."
             (should (equal (mapcar (lambda (message) (map-elt message 'content))
                                   (seq-filter (lambda (message)
                                                 (equal (map-elt message 'role) "user"))
-                                              (gent--session-messages gent--current-session)))
+                                              (gent-session-messages gent--current-session)))
                            '("edit" "next")))))))))
 
 (ert-deftest gent-test-buffer-error-starts-queued-turn ()
@@ -1569,7 +1569,7 @@ completion."
         (let ((first (car requests)))
           (funcall (plist-get first :on-error) "request failed")
           (should (eq (gent--state) 'running))
-          (should-not (gent--session-queue gent--current-session))
+          (should-not (gent-session-queue gent--current-session))
           (should (= (length requests) 2))
           ;; A late callback from the failed request cannot finish its successor.
           (funcall (plist-get first :on-done) "stale answer")
@@ -1588,9 +1588,9 @@ completion."
       (gent-test--type "first")
       (gent--await-approval (current-buffer) #'ignore "run_shell" 'command "true" #'ignore)
       (gent--answer (current-buffer) 'always)
-      (should (equal (gent--session-trusted gent--current-session) '("run_shell")))
+      (should (equal (gent-session-trusted gent--current-session) '("run_shell")))
       (gent-reset t)
-      (should-not (gent--session-trusted gent--current-session)))))
+      (should-not (gent-session-trusted gent--current-session)))))
 
 (ert-deftest gent-test-buffer-reset-confirms-before-discarding ()
   (gent-test--with-gent-buffer
@@ -1606,7 +1606,7 @@ completion."
                  (lambda (&rest _) (setq asked t) nil)))
         (gent-reset)
         (should asked)
-        (should (equal (gent--session-messages gent--current-session)
+        (should (equal (gent-session-messages gent--current-session)
                        '(((role . "user") (content . "keep"))))))
       ;; Accepting discards it.
       (cl-letf (((symbol-function 'y-or-n-p)
@@ -1614,13 +1614,13 @@ completion."
         (setq asked nil)
         (gent-reset)
         (should asked)
-        (should-not (gent--session-messages gent--current-session)))
+        (should-not (gent-session-messages gent--current-session)))
       ;; A prefix argument skips the question.
       (gent--append '((role . "user") (content . "again")))
       (cl-letf (((symbol-function 'y-or-n-p)
                  (lambda (&rest _) (error "Should not ask"))))
         (gent-reset t)
-        (should-not (gent--session-messages gent--current-session))))))
+        (should-not (gent-session-messages gent--current-session))))))
 
 (ert-deftest gent-test-buffer-interrupt-discards-approval-and-queue ()
   (let (request)
@@ -1631,7 +1631,7 @@ completion."
         ;; Starting another turn must preserve the active conversation on error.
         (should-error (gent--start-turn (current-buffer) "overlap"
                                        (gent--shell (current-buffer))))
-        (should (equal (map-elt (car (gent--session-messages gent--current-session)) 'content)
+        (should (equal (map-elt (car (gent-session-messages gent--current-session)) 'content)
                        "first"))
         (gent-test--type "second")
         (gent--await-approval (current-buffer) #'ignore "edit_file" 'diff "diff" #'ignore)
@@ -1639,7 +1639,7 @@ completion."
         (should (eq (gent--state) 'awaiting-approval))
         (gent-interrupt)
         (should (eq (gent--state) 'idle))
-        (should-not (gent--session-queue gent--current-session))
+        (should-not (gent-session-queue gent--current-session))
         (should-not (gent--session-pending gent--current-session))
         (should-error (gent-approve) :type 'user-error)
         (funcall (plist-get request :on-done) "stale answer")
@@ -1764,7 +1764,7 @@ Pass SESSION-ID as the conversation ID."
               (should (equal (map-elt tool 'tool_call_id) "c1"))
               (should (string-search "hello" (map-elt tool 'content))))
             ;; Each response has its own reasoning accumulator.
-            (let ((answer (car (last (gent--session-messages gent--current-session)))))
+            (let ((answer (car (last (gent-session-messages gent--current-session)))))
               (should (equal (map-elt answer 'content) "It says hello."))
               (should-not (assq 'reasoning_content answer)))))))))
 
