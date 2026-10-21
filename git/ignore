@@ -1,3 +1,6 @@
 .dir-locals.el
 profile.json.gz
 .monorepo
+.#*
+*~
+\#*#
