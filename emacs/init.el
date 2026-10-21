@@ -12,9 +12,9 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window company consult corfu diff-hl dracula-theme eglot marginalia
-                markdown-ts-mode nerd-icons nerd-icons-completion orderless
-                posframe vertico vundo))
+   '(ace-window auto-highlight-symbol company consult corfu diff-hl dracula-theme
+                eglot marginalia markdown-ts-mode nerd-icons
+                nerd-icons-completion orderless posframe rust-mode vertico vundo))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -121,6 +121,13 @@
          (profiler-report-mode . display-line-numbers-off))
   :init
   (global-display-line-numbers-mode))
+
+(use-package auto-highlight-symbol
+  :ensure t
+  :defer 3
+  :commands (global-auto-highlight-symbol-mode)
+  :init
+  (global-auto-highlight-symbol-mode))
 
 ;;; ----------------------------------------------------------------------------
 ;;; 4. Window Management & Navigation
