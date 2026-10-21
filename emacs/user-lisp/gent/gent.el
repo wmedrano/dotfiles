@@ -25,7 +25,7 @@
 ;;   C-c C-c  `gent-interrupt'          cancel the current turn
 ;;   C-c C-t  `gent-toggle-details'     show or hide reasoning and tool output
 ;;   C-c C-e  `gent-set-reasoning-effort' change how hard the model thinks
-;;   C-c C-k  `gent-reset'              forget the conversation
+;;   C-c C-k  `gent-reset'              forget the conversation (asks first)
 ;;   C-c C-m  `gent-set-backend'        select a configured backend
 ;;
 ;; `gent-batch-run' runs a single prompt through the full loop from the
@@ -1105,19 +1105,26 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
     (setf (gent--session-queue session) nil)
     (gent--update-mode-line)))
 
-(defun gent-reset ()
-  "Forget the conversation in the current gent buffer and clear it."
-  (interactive)
+(defun gent-reset (&optional no-confirm)
+  "Forget the conversation in the current gent buffer and clear it.
+Ask for confirmation when the conversation has messages, unless
+NO-CONFIRM is non-nil.  The interactive prefix argument means
+NO-CONFIRM, so \\[universal-argument] \\[gent-reset] resets without asking."
+  (interactive "P")
   (gent--ensure-buffer)
   (let ((session gent--current-session))
-    (unless (eq (gent--state) 'idle)
-      (gent-interrupt))
-    (setf (gent--session-messages session) nil
-          (gent--session-id session) nil
-          (gent--session-trusted session) nil))
-  (gent--draw nil)
-  (gent--update-mode-line)
-  (message "gent: conversation reset"))
+    (if (and (not no-confirm)
+             (gent--session-messages session)
+             (not (y-or-n-p "Reset the gent conversation? ")))
+        (message "gent: reset cancelled")
+      (unless (eq (gent--state) 'idle)
+        (gent-interrupt))
+      (setf (gent--session-messages session) nil
+            (gent--session-id session) nil
+            (gent--session-trusted session) nil)
+      (gent--draw nil)
+      (gent--update-mode-line)
+      (message "gent: conversation reset"))))
 
 (defun gent--current-backend ()
   "Return the backend of the current gent buffer, or signal an error."

@@ -560,11 +560,23 @@ Approval requests go to `gent-test--confirm'."
     (should (string-search "a.txt" (gent-test--call "read_file" '((path . "."))))) ))
 
 (ert-deftest gent-test-path-outside-root ()
+  ;; The temporary project lives under /tmp, which is itself an allowed root,
+  ;; so only paths that escape both the project and /tmp are refused.
   (gent-test--with-project
     (should (string-prefix-p "Error: Path"
-                             (gent-test--call "read_file" '((path . "../etc/passwd")))))
+                             (gent-test--call "read_file" '((path . "/etc/passwd")))))
     (should (string-prefix-p "Error: Path"
-                             (gent-test--call "read_file" '((path . "/etc/passwd")))))))
+                             (gent-test--call "read_file" '((path . "../../etc/passwd")))))
+    ;; Absolute paths under /tmp are in scope even when they are outside the
+    ;; project, as when the model writes a scratch file there.
+    (let ((outside (make-temp-file "gent-test-outside")))
+      (unwind-protect
+          (progn
+            (with-temp-file outside (insert "outside sibling"))
+            (should (string-search "outside sibling"
+                                   (gent-test--call
+                                    "read_file" `((path . ,outside))))))
+        (delete-file outside)))))
 
 (ert-deftest gent-test-unknown-tool-and-bad-json ()
   (gent-test--with-project
@@ -1250,7 +1262,7 @@ completion."
                (old (car requests))
                (process (make-pipe-process :name "gent-test-reset" :noquery t)))
           (setf (gent--session-request-process session) process)
-          (gent-reset)
+          (gent-reset t)
           (should-not (process-live-p process))
           (should (eq gent--current-session session))
           (should (> (gent--session-turn session) turn))
@@ -1312,7 +1324,7 @@ completion."
                             ids))
           ;; Sharing the same backend does not share conversation IDs.
           (setf (gent--session-backend gent--current-session) gent-llm-default-backend)
-          (gent-reset)
+          (gent-reset t)
           (should-not (gent--session-id gent--current-session))
           (gent-test--type "new conversation")
           (gent-test--wait-idle)
@@ -1577,8 +1589,38 @@ completion."
       (gent--await-approval (current-buffer) #'ignore "run_shell" 'command "true" #'ignore)
       (gent--answer (current-buffer) 'always)
       (should (equal (gent--session-trusted gent--current-session) '("run_shell")))
-      (gent-reset)
+      (gent-reset t)
       (should-not (gent--session-trusted gent--current-session)))))
+
+(ert-deftest gent-test-buffer-reset-confirms-before-discarding ()
+  (gent-test--with-gent-buffer
+    (let ((asked nil))
+      ;; Nothing to lose yet, so no question.
+      (cl-letf (((symbol-function 'y-or-n-p)
+                 (lambda (&rest _) (setq asked t) t)))
+        (gent-reset)
+        (should-not asked))
+      (gent--append '((role . "user") (content . "keep")))
+      ;; Declining keeps the conversation.
+      (cl-letf (((symbol-function 'y-or-n-p)
+                 (lambda (&rest _) (setq asked t) nil)))
+        (gent-reset)
+        (should asked)
+        (should (equal (gent--session-messages gent--current-session)
+                       '(((role . "user") (content . "keep"))))))
+      ;; Accepting discards it.
+      (cl-letf (((symbol-function 'y-or-n-p)
+                 (lambda (&rest _) (setq asked t) t)))
+        (setq asked nil)
+        (gent-reset)
+        (should asked)
+        (should-not (gent--session-messages gent--current-session)))
+      ;; A prefix argument skips the question.
+      (gent--append '((role . "user") (content . "again")))
+      (cl-letf (((symbol-function 'y-or-n-p)
+                 (lambda (&rest _) (error "Should not ask"))))
+        (gent-reset t)
+        (should-not (gent--session-messages gent--current-session))))))
 
 (ert-deftest gent-test-buffer-interrupt-discards-approval-and-queue ()
   (let (request)
