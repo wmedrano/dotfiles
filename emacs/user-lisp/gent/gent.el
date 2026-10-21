@@ -35,6 +35,7 @@
 
 (require 'cl-lib)
 (require 'diff-mode)
+(require 'face-remap)
 (require 'json)
 (require 'map)
 (require 'project)
@@ -370,26 +371,23 @@ and :elided tool result IDs (or message positions) changed by compaction."
                     (call-interactively command))))
     (propertize label 'local-map map 'mouse-face 'highlight 'help-echo help)))
 
+(defun gent--header-hat (shape)
+  "Return hat SHAPE colored for the current execution state."
+  (propertize shape 'face
+              (pcase (gent--state)
+                ('idle 'shadow)
+                ('running 'gent-prompt-face)
+                ('awaiting-approval 'gent-approval-face))))
+
 (defun gent--header-line ()
-  "Return the current conversation's project, model, effort and status."
+  "Return the upper header row: hat crown, project and status.
+Displayed in the tab line, above `gent--header-details'."
   (let* ((session gent--current-session)
-         (root (or (gent--session-root session) default-directory))
-         (backend (or (gent--session-backend session) gent-llm-default-backend))
-         (effort (and backend (gent-llm-backend-reasoning-effort backend))))
+         (root (or (gent--session-root session) default-directory)))
     (concat
-     " gent · "
+     " " (gent--header-hat "  ████  ") " gent · "
      (propertize (file-name-nondirectory (directory-file-name root))
                  'face 'bold 'help-echo root)
-     "  │  "
-     (gent--header-button
-      (if backend (gent-llm-backend-model backend) "No backend")
-      #'gent-set-backend "mouse-1: Select backend (C-c C-m)")
-     " · "
-     (if backend
-         (gent--header-button (or effort "default")
-                              #'gent-set-reasoning-effort
-                              "mouse-1: Set reasoning effort (C-c C-e)")
-       "default")
      "  │  "
      (pcase (gent--state)
        ('awaiting-approval (propertize "Approval needed" 'face 'gent-approval-face))
@@ -397,6 +395,24 @@ and :elided tool result IDs (or message positions) changed by compaction."
        ('idle "Ready"))
      (when-let* ((queue (gent--session-queue session)))
        (format " · %d queued" (length queue)))
+     " ")))
+
+(defun gent--header-details ()
+  "Return the lower header row: hat brim, model and reasoning effort."
+  (let* ((backend (or (gent--session-backend gent--current-session)
+                      gent-llm-default-backend))
+         (effort (and backend (gent-llm-backend-reasoning-effort backend))))
+    (concat
+     " " (gent--header-hat "▀▀▀▀▀▀▀▀") " Model: "
+     (gent--header-button
+      (if backend (gent-llm-backend-model backend) "No backend")
+      #'gent-set-backend "mouse-1: Select backend (C-c C-m)")
+     "  │  Reasoning: "
+     (if backend
+         (gent--header-button (or effort "default")
+                              #'gent-set-reasoning-effort
+                              "mouse-1: Set reasoning effort (C-c C-e)")
+       "default")
      " ")))
 
 (defun gent--format-arguments (arguments)
@@ -1018,7 +1034,12 @@ No tools, network requests or credential callbacks are run."
 Type a prompt at the bottom of the buffer and send it with \\[gent-send].
 \\{gent-mode-map}"
   (setq gent--current-session (make-gent--session))
-  (setq-local header-line-format '(:eval (gent--header-line)))
+  ;; Each native bar is one line; together they form a pinned two-row header.
+  ;; Match their fonts and backgrounds so the two halves of the hat align.
+  (face-remap-add-relative 'header-line '(:underline nil :box nil) 'fixed-pitch)
+  (face-remap-set-base 'tab-line 'header-line)
+  (setq-local tab-line-format '(:eval (gent--header-line)))
+  (setq-local header-line-format '(:eval (gent--header-details)))
   (setq gent--history (make-ring 100))
   (add-to-invisibility-spec 'gent-details)
   (visual-line-mode 1)
