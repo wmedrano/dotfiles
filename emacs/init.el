@@ -12,9 +12,9 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window consult corfu diff-hl dracula-theme marginalia
-                markdown-ts-mode nerd-icons nerd-icons-completion
-                orderless posframe vertico))
+   '(ace-window company consult corfu diff-hl dracula-theme eglot marginalia
+                markdown-ts-mode nerd-icons nerd-icons-completion orderless
+                posframe vertico vundo))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -80,6 +80,9 @@
 (use-package isearch
   :custom
   (isearch-allow-scroll t))
+
+(use-package vundo
+  :ensure t)
 
 ;;; ----------------------------------------------------------------------------
 ;;; 3. Visuals & UI
