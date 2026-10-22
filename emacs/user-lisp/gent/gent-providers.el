@@ -306,6 +306,7 @@ All arguments and the returned process follow `gent-llm-chat'."
 
 (defun gent-llm-make-dumile-backend (&rest args)
   "Create a Dumile backend with keyword arguments ARGS.
+
 ARGS are passed to `gent-make-openai-backend', including :model, :api-key
 \(a string or function), and request settings."
   (apply #'gent-make-openai-backend
@@ -313,11 +314,13 @@ ARGS are passed to `gent-make-openai-backend', including :model, :api-key
 
 (defun gent-llm-make-opencode-go-backend (&rest args)
   "Create an OpenCode Go backend with keyword arguments ARGS.
-ARGS are passed to `gent-make-openai-backend', including :model, :api-key
-\(a string or function), and request settings.
-Requests must supply :session-id, reused for the same conversation.
-It is sent as x-opencode-session for routing and prompt caching.
-See https://opencode.ai/v2/docs/console/go/#where-can-i-use-it."
+
+ARGS are passed to `gent-make-openai-backend', including :model,
+:api-key \(a string or function), and request settings.  Requests must
+supply :session-id, reused for the same conversation.  It is sent as
+x-opencode-session for routing and prompt caching.  See
+https://opencode.ai/v2/docs/console/api/inference/ and
+https://opencode.ai/v2/docs/console/go/#where-can-i-use-it."
   (apply #'gent-make-openai-backend
          :name "opencodego" :url-base "https://opencode.ai/inference/go/v1"
          :session-id-header "x-opencode-session"
