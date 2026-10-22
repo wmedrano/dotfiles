@@ -61,6 +61,7 @@
   (indent-tabs-mode nil)
   (fill-column 80)
   (ring-bell-function #'ignore)
+  (read-process-output-max (* 1024 1024))
   :config
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
   (set-face-attribute 'default nil :family "JetBrains Mono" :height 120))
@@ -360,6 +361,17 @@
 (use-package typescript-ts-mode
   :mode "\\.ts\\'"
   :hook (typescript-ts-mode . eglot-ensure))
+
+(use-package c-ts-mode
+  :custom
+  (c-ts-mode-indent-offset 2)
+  (c-ts-mode-indent-style 'google)
+  :mode ("\\.\\(cc\\|cpp\\|cxx\\|hh\\|hpp\\|hxx\\|ipp\\|tpp\\)\\'" . c++-ts-mode)
+  :init
+  (add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
+  (add-to-list 'major-mode-remap-alist '(c++-mode . c++-ts-mode))
+  (add-to-list 'major-mode-remap-alist '(c-or-c++-mode . c-or-c++-ts-mode))
+  :hook ((c-ts-mode c++-ts-mode) . eglot-ensure))
 
 (use-package toml-ts-mode
   :mode "\\.toml\\'")
