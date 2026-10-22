@@ -398,6 +398,35 @@ unindented namespace bodies."
   :ensure t
   :mode ("\\.md\\'" "\\.markdown\\'"))
 
+(use-package org
+  :custom
+  (org-startup-with-inline-images t)
+  (org-use-sub-superscripts '{})
+  (org-export-with-sub-superscripts '{})
+  (org-src-window-setup 'current-window)
+  :hook (org-babel-after-execute . org-redisplay-inline-images)
+  :config
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t)
+     (shell . t)
+     (dot . t))))
+
+(use-package ox
+  :custom
+  (org-export-use-babel nil))
+
+(use-package ox-html
+  :custom
+  (org-html-doctype "html5")
+  (org-html-html5-fancy t)
+  (org-html-validation-link nil)
+  (org-html-head-include-default-style nil)
+  (org-html-htmlize-output-type 'css))
+
+(use-package htmlize
+  :ensure t)
+
 (use-package gent
   :load-path "user-lisp/gent"
   :commands (gent)
