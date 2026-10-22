@@ -363,9 +363,18 @@
   :hook (typescript-ts-mode . eglot-ensure))
 
 (use-package c-ts-mode
+  :preface
+  (defun c-ts-google-indent-style ()
+    "Google-like indent rules: K&R plus 1-space access specifiers and
+unindented namespace bodies."
+    (let ((google '(((node-is "access_specifier") parent-bol 1)
+                    ((parent-is "\\`declaration_list\\'") parent-bol 0))))
+      `((c . ,(alist-get 'c (c-ts-mode--simple-indent-rules 'c 'k&r)))
+        (cpp . ,(append google
+                        (alist-get 'cpp (c-ts-mode--simple-indent-rules 'cpp 'k&r)))))))
   :custom
   (c-ts-mode-indent-offset 2)
-  (c-ts-mode-indent-style 'google)
+  (c-ts-mode-indent-style #'c-ts-google-indent-style)
   :mode ("\\.\\(cc\\|cpp\\|cxx\\|hh\\|hpp\\|hxx\\|ipp\\|tpp\\)\\'" . c++-ts-mode)
   :init
   (add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
