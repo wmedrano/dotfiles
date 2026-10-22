@@ -135,11 +135,22 @@ run without a package selector."
             (define-key map (kbd "C-c C-t") #'cargo-test)
             map))
 
+(defcustom cargo-minor-mode-inhibit-functions nil
+  "Functions called with no arguments before enabling `cargo-minor-mode'.
+If any returns non-nil, `cargo-minor-mode-maybe-enable' does nothing."
+  :type 'hook
+  :group 'tools)
+
 ;;;###autoload
 (defun cargo-minor-mode-maybe-enable ()
-  "Enable `cargo-minor-mode' if the current buffer visits a Cargo.toml."
-  (when (and buffer-file-name
-             (string= (file-name-nondirectory buffer-file-name) "Cargo.toml"))
+  "Enable `cargo-minor-mode' in Rust buffers and Cargo.toml buffers.
+Do nothing if any of `cargo-minor-mode-inhibit-functions' returns non-nil."
+  (when (and (or (derived-mode-p 'rust-ts-mode 'rust-mode)
+                 (and buffer-file-name
+                      (string= (file-name-nondirectory buffer-file-name)
+                               "Cargo.toml")))
+             (not (run-hook-with-args-until-success
+                   'cargo-minor-mode-inhibit-functions)))
     (cargo-minor-mode)))
 
 (provide 'cargo-minor-mode)

@@ -107,6 +107,11 @@ If COMMAND fails, report it and return nil."
   (when-let* ((root (locate-dominating-file dir monorepo-file-name)))
     (monorepo--read-project (file-name-as-directory (expand-file-name root)))))
 
+;;;###autoload
+(defun monorepo-buffer-p ()
+  "Return non-nil if the current buffer is inside a monorepo project."
+  (and (locate-dominating-file default-directory monorepo-file-name) t))
+
 (cl-defmethod project-root ((project monorepo-project))
   (monorepo-project-root project))
 

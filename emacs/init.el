@@ -387,8 +387,12 @@ unindented namespace bodies."
 
 (use-package cargo-minor-mode
   :load-path "user-lisp"
-  :hook ((rust-ts-mode . cargo-minor-mode)
-         (toml-ts-mode . cargo-minor-mode-maybe-enable)))
+  :hook ((rust-ts-mode . cargo-minor-mode-maybe-enable)
+         (toml-ts-mode . cargo-minor-mode-maybe-enable))
+  :functions (monorepo-buffer-p)
+  :config
+  (autoload 'monorepo-buffer-p "monorepo")
+  (add-hook 'cargo-minor-mode-inhibit-functions #'monorepo-buffer-p))
 
 (use-package markdown-ts-mode
   :ensure t
