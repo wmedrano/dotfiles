@@ -1596,6 +1596,44 @@ completion."
             (funcall (plist-get (car requests) :on-done) "duplicate answer")
             (should (equal (buffer-string) transcript))))))))
 
+(ert-deftest gent-test-buffer-error-saves-failed-request ()
+  (gent-test--with-project
+    (let ((gent-llm-default-backend
+           (gent-make-openai-backend
+            :model "failed-model" :url-base "https://example.test/v1"
+            :api-key (lambda () (ert-fail "Saving resolved API credentials"))))
+          (record nil)
+          requests)
+      (unwind-protect
+          (cl-letf (((symbol-function 'gent-llm-chat)
+                     (lambda (&rest args) (push args requests) nil)))
+            (gent-test--with-gent-buffer
+              (setf (gent-session-messages gent-session-current)
+                    '(((role . "user") (content . "earlier"))
+                      ((role . "assistant") (content . "")
+                       (reasoning_content . "kept reasoning")
+                       (tool_calls . [((id . "call-1") (type . "function")
+                                       (function . ((name . "read_file")
+                                                    (arguments . "{}"))))]))
+                      ((role . "tool") (tool_call_id . "call-1") (content . "ok"))))
+              (gent-test--type "next")
+              (let ((session-id (plist-get (car requests) :session-id)))
+                ;; Callbacks may run while another buffer is current.
+                (with-temp-buffer
+                  (funcall (plist-get (car requests) :on-error) "upstream 400"))
+                (setq record (get-buffer (format "*gent failed request: %s*"
+                                                 (file-name-nondirectory
+                                                  (directory-file-name default-directory)))))
+                (should record)
+                (should (string-search (buffer-name record) (buffer-string)))
+                (with-current-buffer record
+                  (should (string-search "Error: upstream 400" (buffer-string)))
+                  (should (string-search (format "Session ID: %s" session-id) (buffer-string)))
+                  (should (string-search "\"failed-model\"" (buffer-string)))
+                  (should (string-search "kept reasoning" (buffer-string)))
+                  (should (string-search "\"next\"" (buffer-string)))))))
+        (when (buffer-live-p record) (kill-buffer record))))))
+
 (ert-deftest gent-test-buffer-always-trusts-tool-until-reset ()
   (cl-letf (((symbol-function 'gent-llm-chat) (lambda (&rest _) nil)))
     (gent-test--with-gent-buffer

@@ -484,6 +484,8 @@ SHELL receives the output.  ITERATION counts requests in this turn."
                               (setq reasoning nil)
                               (funcall write (gent--format-reasoning "\n\n")))))
            (calls nil)
+           (backend (or (gent-session-backend session) gent-llm-default-backend))
+           (session-id (gent--ensure-session-id))
            (request (gent--prepare-request (gent-session-messages session))))
       (setf (gent-session-messages session)
             (cdr (plist-get request :messages)))
@@ -491,7 +493,7 @@ SHELL receives the output.  ITERATION counts requests in this turn."
       (condition-case err
           (setf (gent-session-request-process session)
            (gent-llm-chat
-           :session-id (gent--ensure-session-id)
+           :session-id session-id
            :messages (plist-get request :messages)
            :backend (gent-session-backend session)
            :tools (plist-get request :tools)
@@ -521,6 +523,12 @@ SHELL receives the output.  ITERATION counts requests in this turn."
            :on-error (lambda (message)
                        (when (gent--live-p buffer turn)
                          (funcall write (format "\n\n%s\n" message))
+                         (funcall write
+                                  (format "gent: request saved in %s\n"
+                                          (buffer-name
+                                           (with-current-buffer buffer
+                                             (gent--save-failed-request
+                                              backend session-id request message)))))
                          (gent--finish buffer shell nil)))))
         (error
          (funcall write (format "\n\ngent: %s\n" (error-message-string err)))
@@ -860,6 +868,45 @@ While a turn is running the prompt is queued and sent after it."
   "Insert OBJECT as indented JSON in the current buffer."
   (let ((json-encoding-pretty-print t))
     (insert (json-encode object) "\n")))
+
+(defun gent--save-failed-request (backend session-id request error)
+  "Record REQUEST, which BACKEND rejected with ERROR, and return its buffer.
+REQUEST is a plist from `gent--prepare-request' and SESSION-ID the
+conversation it was sent for.  Each failure replaces the previous record
+for this project."
+  (let ((root (gent--root))
+        (messages (plist-get request :messages))
+        (tools (plist-get request :tools)))
+    (with-current-buffer
+        (get-buffer-create
+         (format "*gent failed request: %s*"
+                 (file-name-nondirectory (directory-file-name root))))
+      (special-mode)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert "Gent failed request\n\n"
+                (format "Time: %s\nProject root: %s\nSession ID: %s\n"
+                        (format-time-string "%F %T%z") root session-id)
+                (format "Backend: %s\n" (type-of backend))
+                (format "Error: %s\n" error))
+        (let ((details (and backend
+                            (condition-case err
+                                (gent-llm-backend-preview backend messages tools)
+                              (error `((preview-error . ,(error-message-string err))))))))
+          (when-let* ((endpoint (map-elt details 'endpoint)))
+            (insert (format "Endpoint: %s\n" endpoint)))
+          (insert "\nRequest body\n\n")
+          (cond ((map-elt details 'payload)
+                 (gent--insert-debug-json (map-elt details 'payload)))
+                ((map-elt details 'preview-error)
+                 (insert (format "Preview failed: %s\n" (map-elt details 'preview-error)))
+                 (gent--insert-debug-json (vconcat messages)))
+                (t
+                 (insert "This backend does not provide a wire preview; messages follow.\n\n")
+                 (gent--insert-debug-json (vconcat messages)))))
+        (goto-char (point-min))
+        (set-buffer-modified-p nil))
+      (current-buffer))))
 
 (defun gent-send-dry-run ()
   "Preview the first request for the current input without sending it.
