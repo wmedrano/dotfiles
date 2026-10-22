@@ -399,12 +399,13 @@ unindented namespace bodies."
   :mode ("\\.md\\'" "\\.markdown\\'"))
 
 (use-package org
+  :functions (org-link-preview-refresh)
   :custom
   (org-startup-with-inline-images t)
   (org-use-sub-superscripts '{})
   (org-export-with-sub-superscripts '{})
   (org-src-window-setup 'current-window)
-  :hook (org-babel-after-execute . org-redisplay-inline-images)
+  :hook (org-babel-after-execute . org-link-preview-refresh)
   :config
   (org-babel-do-load-languages
    'org-babel-load-languages
@@ -413,6 +414,7 @@ unindented namespace bodies."
      (dot . t))))
 
 (use-package ox
+  :functions (org-export-derived-backend-p)
   :custom
   (org-export-use-babel nil))
 
@@ -422,7 +424,26 @@ unindented namespace bodies."
   (org-html-html5-fancy t)
   (org-html-validation-link nil)
   (org-html-head-include-default-style nil)
-  (org-html-htmlize-output-type 'css))
+  (org-html-htmlize-output-type 'css)
+  (org-html-postamble t)
+  (org-html-postamble-format '(("en" "<p>%a · Updated %C</p>")))
+  (org-html-metadata-timestamp-format "%Y-%m-%d")
+  :config
+  (setq org-html-head
+        (concat "<style>\n"
+                (with-temp-buffer
+                  (insert-file-contents
+                   (expand-file-name "org-export.css" user-emacs-directory))
+                  (buffer-string))
+                "</style>"))
+  (defun org-html-src-block-data-lang (text backend _info)
+    "Add a data-lang attribute to HTML src blocks so CSS can label them."
+    (if (org-export-derived-backend-p backend 'html)
+        (replace-regexp-in-string "<pre class=\"src src-\\([^\" ]+\\)\""
+                                  "\\& data-lang=\"\\1\"" text)
+      text))
+  (add-to-list 'org-export-filter-src-block-functions
+               #'org-html-src-block-data-lang))
 
 (use-package htmlize
   :ensure t)
