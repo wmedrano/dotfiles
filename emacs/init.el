@@ -372,11 +372,19 @@
   (defun c-ts-google-indent-style ()
     "Google-like indent rules: K&R plus 1-space access specifiers and
 unindented namespace bodies."
-    (let ((google '(((node-is "access_specifier") parent-bol 1)
-                    ((parent-is "\\`declaration_list\\'") parent-bol 0))))
-      `((c . ,(alist-get 'c (c-ts-mode--simple-indent-rules 'c 'k&r)))
-        (cpp . ,(append google
-                        (alist-get 'cpp (c-ts-mode--simple-indent-rules 'cpp 'k&r)))))))
+    ;; Emacs 30 expects a flat list of rules for the current language;
+    ;; Emacs 31 expects a full `treesit-simple-indent-rules' alist.
+    (let* ((lang (if (derived-mode-p 'c++-ts-mode) 'cpp 'c))
+           (emacs31 (fboundp 'c-ts-mode--simple-indent-rules))
+           (k&r (if emacs31
+                    (alist-get lang (c-ts-mode--simple-indent-rules lang 'k&r))
+                  (alist-get 'k&r (c-ts-mode--indent-styles lang))))
+           (rules (if (eq lang 'cpp)
+                      (append '(((node-is "access_specifier") parent-bol 1)
+                                ((parent-is "\\`declaration_list\\'") parent-bol 0))
+                              k&r)
+                    k&r)))
+      (if emacs31 `((,lang . ,rules)) rules)))
   :custom
   (c-ts-mode-indent-offset 2)
   (c-ts-mode-indent-style #'c-ts-google-indent-style)
