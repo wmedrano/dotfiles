@@ -23,3 +23,4 @@ if [[ -d "/home/wmedrano/src/chromium/src/third_party/depot_tools" ]]; then
         *) export PATH="/home/wmedrano/src/chromium/src/third_party/depot_tools:$PATH" ;;
     esac
 fi
+alias open='xdg-open'
