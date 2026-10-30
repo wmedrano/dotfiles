@@ -337,6 +337,7 @@
    ("f" . flymake-show-buffer-diagnostics)
    ("F" . flymake-show-project-diagnostics)
    ("a" . eglot-code-actions)
+   ("e" . consult-flymake)
    ("d" . xref-find-definitions)
    ("x" . xref-find-references)))
 
