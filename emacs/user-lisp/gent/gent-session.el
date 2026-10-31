@@ -9,13 +9,39 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'gent-prompt)
 (require 'gent-tools)
 
+(defconst gent-session-base-prompt
+  "You are gent, a coding agent running inside Emacs.  You help the user \
+understand and change the project they are working on.
+
+- Use the tools to look at the project before answering questions about it; \
+do not guess file contents.
+- Use run_shell with ls, find, rg or grep to explore, and read_file to read.
+- Make focused changes with edit_file.  Every change and command is shown to \
+the user, who may reject it; if they leave a note, follow it.
+- Keep answers short and concrete.  Refer to code as path:line."
+  "Instructions that open the default system prompt.")
+
+(defun gent-session-project-context (root)
+  "Get the system prompt for the project at ROOT."
+    (format "Working directory: %s\nAvailable tools: %s"
+            root
+            (string-join (gent-tools-names) ", ")))
+
+(defun gent-session-project-instructions (root)
+  "Return the context from the AGENTS.md file in ROOT."
+  (let* ((max-chars 20000)
+         (file (expand-file-name "AGENTS.md" root)))
+    (when (file-readable-p file)
+      (with-temp-buffer
+        (insert-file-contents file nil 0 max-chars)
+        (format "# %s\n\n%s" "AGENTS.md" (buffer-string))))))
+
 (defconst gent-default-system-prompt
-  `(("base" . ,gent-base-prompt)
-    ("project" . gent-project-context)
-    ("instructions" . gent-project-instructions))
+  `(("base" . ,gent-session-base-prompt)
+    ("project" . gent-session-project-context)
+    ("instructions" . gent-session-project-instructions))
   "Default value of the `system-prompt' slot of `gent-session'.
 Parts are combined as described in `gent-session-system-prompt-string'.
 Treat this as read-only; set the slot per session instead of mutating it.")
