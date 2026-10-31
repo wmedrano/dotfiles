@@ -67,6 +67,16 @@
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
   (set-face-attribute 'default nil :family "JetBrains Mono" :height 120))
 
+;; `C-c e' is a single entry point for code tooling, so it spans several
+;; packages (flymake, xref, ...) rather than one.  Each tool also keeps its
+;; own standard binding (`M-g d' for diagnostics, `M-.'/`M-?' for xref).
+;; Eglot-only members live in `eglot-mode-map' (see `use-package eglot').
+(defvar code-prefix-map (make-sparse-keymap)
+  "Prefix map for code actions, diagnostics, and navigation.")
+(define-key global-map (kbd "C-c e") code-prefix-map)
+(define-key code-prefix-map (kbd "d") #'xref-find-definitions)
+(define-key code-prefix-map (kbd "x") #'xref-find-references)
+
 (use-package autorevert
   :init
   (global-auto-revert-mode))
@@ -77,7 +87,10 @@
   (which-key-lighter "")
   (which-key-idle-delay 0.2)
   :init
-  (which-key-mode))
+  (which-key-mode)
+  :config
+  ;; Describe the code-tooling prefix (see `code-prefix-map').
+  (which-key-add-key-based-replacements "C-c e" "code"))
 
 (use-package isearch
   :custom
@@ -220,6 +233,7 @@
 (use-package consult
   :defer 1
   :ensure t
+  :commands (consult-flymake)
   :bind
   (("C-x b" . consult-buffer)
    ("C-x 4 b" . consult-buffer-other-window)
@@ -269,10 +283,13 @@
 (use-package diff-hl
   :ensure t
   :hook (dired-mode . diff-hl-dired-mode)
-  :commands (global-diff-hl-mode diff-hl-flydiff-mode)
+  :defines (diff-hl-mode-map)
+  :commands (global-diff-hl-mode diff-hl-flydiff-mode diff-hl-show-hunk)
   :init
   (global-diff-hl-mode)
-  (diff-hl-flydiff-mode))
+  (diff-hl-flydiff-mode)
+  :bind (:map diff-hl-mode-map
+              ("C-c v" . diff-hl-show-hunk)))
 
 (use-package diff-mode
   :bind
@@ -309,9 +326,10 @@
 
 (use-package flymake
   :hook (emacs-lisp-mode . flymake-mode)
-  :bind
-  (("M-g d" . flymake-show-buffer-diagnostics)
-   ("M-g D" . flymake-show-project-diagnostics)))
+  :bind (:map flymake-mode-map
+              ("C-c e e" . consult-flymake)
+              ("C-c e f" . flymake-show-buffer-diagnostics)
+              ("C-c e F" . flymake-show-project-diagnostics)))
 
 (use-package eldoc
   :custom
@@ -329,17 +347,12 @@
     (eglot-inlay-hints-mode -1))
   :hook (eglot-managed-mode . eglot-inlay-hints-off)
   :commands (eglot-inlay-hints-mode)
-  :bind
-  (:prefix "C-c e"
-   :prefix-map eglot-prefix-map
-   ("r" . eglot-rename)
-   ("t" . eglot-momentary-inlay-hints)
-   ("f" . flymake-show-buffer-diagnostics)
-   ("F" . flymake-show-project-diagnostics)
-   ("a" . eglot-code-actions)
-   ("e" . consult-flymake)
-   ("d" . xref-find-definitions)
-   ("x" . xref-find-references)))
+  ;; The eglot-only members of `C-c e': they are scoped to buffers a
+  ;; language server manages.  `code-prefix-map' holds the rest.
+  :bind (:map eglot-mode-map
+              ("C-c e a" . eglot-code-actions)
+              ("C-c e r" . eglot-rename)
+              ("C-c e t" . eglot-momentary-inlay-hints)))
 
 (use-package eglot-extras
   :load-path "user-lisp"
@@ -370,6 +383,11 @@
 
 (use-package c-ts-mode
   :preface
+  ;; Private to c-ts-mode.el, not autoloaded: declare them so the byte
+  ;; compiler knows the calls below resolve once c-ts-mode is loaded.
+  ;; `c-ts-mode--indent-styles' only exists up to Emacs 30.
+  (declare-function c-ts-mode--simple-indent-rules "c-ts-mode" (lang style))
+  (declare-function c-ts-mode--indent-styles "c-ts-mode" (lang))
   (defun c-ts-google-indent-style ()
     "Google-like indent rules: K&R plus 1-space access specifiers and
 unindented namespace bodies."
@@ -433,6 +451,13 @@ unindented namespace bodies."
   (org-export-use-babel nil))
 
 (use-package ox-html
+  :preface
+  (defun org-html-src-block-data-lang (text backend _info)
+    "Add a data-lang attribute to HTML src blocks so CSS can label them."
+    (if (org-export-derived-backend-p backend 'html)
+        (replace-regexp-in-string "<pre class=\"src src-\\([^\" ]+\\)\""
+                                  "\\& data-lang=\"\\1\"" text)
+      text))
   :custom
   (org-html-doctype "html5")
   (org-html-html5-fancy t)
@@ -450,12 +475,6 @@ unindented namespace bodies."
                    (expand-file-name "org-export.css" user-emacs-directory))
                   (buffer-string))
                 "</style>"))
-  (defun org-html-src-block-data-lang (text backend _info)
-    "Add a data-lang attribute to HTML src blocks so CSS can label them."
-    (if (org-export-derived-backend-p backend 'html)
-        (replace-regexp-in-string "<pre class=\"src src-\\([^\" ]+\\)\""
-                                  "\\& data-lang=\"\\1\"" text)
-      text))
   (add-to-list 'org-export-filter-src-block-functions
                #'org-html-src-block-data-lang))
 
