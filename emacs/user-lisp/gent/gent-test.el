@@ -336,7 +336,7 @@ Approval requests go to `gent-test--confirm'."
       (if reasoning
           (should-not (text-properties-at 0 value))
         (should-not (assq 'reasoning_content normalized)))))
-  (should (= (gent--estimate-tokens
+  (should (= (gent-session-estimate-tokens
               '(((role . "assistant") (content . "1234")
                  (reasoning_content . "12345678"))))
              3)))
@@ -344,24 +344,24 @@ Approval requests go to `gent-test--confirm'."
 (ert-deftest gent-test-system-message ()
   (gent-test--with-project
     (gent-test--write-file "AGENTS.md" "Use tabs.")
-    (with-temp-buffer
-      (setq gent-session-current (make-gent-session))
-      (let ((content (map-elt (gent--system-message default-directory) 'content)))
-        (should (string-prefix-p "You are gent" content))
-        (should (string-search default-directory content))
-        (should (string-search "edit_file" content))
-        (should (string-search "Use tabs." content))))))
+    (let ((content (map-elt (gent-session-system-message
+                             (make-gent-session :root default-directory))
+                            'content)))
+      (should (string-prefix-p "You are gent" content))
+      (should (string-search default-directory content))
+      (should (string-search "edit_file" content))
+      (should (string-search "Use tabs." content)))))
 
 (ert-deftest gent-test-session-system-prompt ()
   (gent-test--with-project
-    (with-temp-buffer
-      (setq gent-session-current (make-gent-session
-                                  :system-prompt '(("pirate" . "Be a pirate.")
-                                                   ("project" . gent-session-project-context))))
-      (let ((content (map-elt (gent--system-message default-directory) 'content)))
-        (should (string-prefix-p "Be a pirate." content))
-        (should-not (string-search "You are gent" content))
-        (should (string-search default-directory content))))))
+    (let* ((session (make-gent-session
+                     :root default-directory
+                     :system-prompt '(("pirate" . "Be a pirate.")
+                                      ("project" . gent-session-project-context))))
+           (content (map-elt (gent-session-system-message session) 'content)))
+      (should (string-prefix-p "Be a pirate." content))
+      (should-not (string-search "You are gent" content))
+      (should (string-search default-directory content)))))
 
 (ert-deftest gent-test-tool-definitions ()
   (should (equal (sort (gent-tools-names) #'string<)
@@ -370,7 +370,7 @@ Approval requests go to `gent-test--confirm'."
     (should (map-elt (map-elt definition 'function) 'parameters))))
 
 (ert-deftest gent-test-repair ()
-  (let ((repaired (gent--repair
+  (let ((repaired (gent-session-repair
                    '(((role . "user") (content . "hi"))
                      ((role . "assistant") (content . "")
                       (tool_calls . [((id . "a")) ((id . "b"))]))
@@ -387,13 +387,13 @@ Approval requests go to `gent-test--confirm'."
          (messages (list `((role . "tool") (tool_call_id . "1") (content . ,big))
                          `((role . "tool") (tool_call_id . "2") (content . ,big))
                          `((role . "tool") (tool_call_id . "3") (content . ,big))))
-         (compacted (gent--compact messages)))
-    (should (equal (map-elt (nth 0 compacted) 'content) gent--elided))
-    (should (equal (map-elt (nth 1 compacted) 'content) gent--elided))
+         (compacted (gent-session-compact messages)))
+    (should (equal (map-elt (nth 0 compacted) 'content) gent-session--elided))
+    (should (equal (map-elt (nth 1 compacted) 'content) gent-session--elided))
     (should (equal (map-elt (nth 2 compacted) 'content) big))
     (should (equal (map-elt (nth 0 compacted) 'tool_call_id) "1"))
     (let ((small (list '((role . "tool") (content . "x")))))
-      (should (eq (gent--compact small) small)))))
+      (should (eq (gent-session-compact small) small)))))
 
 ;;; Tools
 
@@ -790,7 +790,7 @@ Return (SUCCESS OUTPUT MESSAGES REQUESTS)."
          (current-buffer) prompt
          (list (cons :write-output (lambda (text &optional _) (setq output (concat output text))))
                (cons :finish-output (lambda (ok)
-                                      (should (eq (gent--state) 'idle))
+                                      (should (eq (gent-session-phase gent-session-current) 'idle))
                                       (setq success ok done t)))))
         (while (not done)
           (accept-process-output nil 0.05))
@@ -848,14 +848,14 @@ completion."
           (list (cons :write-output (lambda (text &optional _) (setq output (concat output text))))
                 (cons :finish-output (lambda (ok) (setq success ok done t)))))
          (with-timeout (5 (error "Timed out waiting for approval"))
-           (while (and (not done) (not (gent--session-pending gent-session-current)))
+           (while (and (not done) (not (gent-session-pending gent-session-current)))
              (accept-process-output nil 0.05)))
-         (should (eq (gent--state) 'awaiting-approval))
+         (should (eq (gent-session-phase gent-session-current) 'awaiting-approval))
          ,@body
          (with-timeout (5 (error "Timed out waiting for the turn"))
            (while (not done)
              (accept-process-output nil 0.05)))
-         (should (eq (gent--state) 'idle))
+         (should (eq (gent-session-phase gent-session-current) 'idle))
          (ignore output success)))))
 
 (ert-deftest gent-test-loop-waits-for-approval ()
@@ -868,7 +868,7 @@ completion."
           ("Done."))
         "edit"
       (let ((gent-buffer (current-buffer)))
-        (should (equal (plist-get (gent--session-pending gent-session-current) :name) "edit_file"))
+        (should (equal (plist-get (gent-session-pending gent-session-current) :name) "edit_file"))
         (should (string-search "+new" output))
         (should (string-search "Awaiting approval" output))
         (should (string-search "approve?" (format "%s" mode-line-process)))
@@ -879,7 +879,7 @@ completion."
         ;; Approve from some other buffer.
         (with-temp-buffer
           (gent-approve))
-        (should (eq (gent--state) 'running))
+        (should (eq (gent-session-phase gent-session-current) 'running))
         (should-not (gent--pending-in-buffer gent-buffer)))
       (with-timeout (5 (error "Timed out"))
         (while (not done) (accept-process-output nil 0.05)))
@@ -919,7 +919,7 @@ completion."
           `((nil ,(gent-test--tool-call "c1" "run_shell" '((command . "touch x")))))
           "touch"
         (gent-interrupt)
-        (should-not (gent--session-pending gent-session-current))
+        (should-not (gent-session-pending gent-session-current))
         (should (equal (map-elt (car (last (gent-session-messages gent-session-current))) 'content)
                        "Cancelled by the user."))
         (should-error (gent-approve) :type 'user-error)
@@ -1004,7 +1004,7 @@ completion."
            (list (cons :write-output (lambda (text &optional _) (setq output (concat output text))))
                  (cons :finish-output (lambda (ok) (setq success ok done t)))))
           (while (not done) (accept-process-output nil 0.05))
-          (should (eq (gent--state) 'idle))
+          (should (eq (gent-session-phase gent-session-current) 'idle))
           (should-not success)
           (should (string-search "boom" output)))))))
 
@@ -1045,7 +1045,7 @@ completion."
 (defun gent-test--wait-idle ()
   "Wait until the current gent session is idle."
   (with-timeout (5 (error "Timed out waiting for the turn"))
-    (while (not (eq (gent--state) 'idle))
+    (while (not (eq (gent-session-phase gent-session-current) 'idle))
       (accept-process-output nil 0.05))))
 
 (ert-deftest gent-test-toggle-details-survives-fontification ()
@@ -1144,7 +1144,7 @@ completion."
                   (should (eq undo buffer-undo-list))
                   (should (equal history (ring-elements gent--history)))
                   (should (= gent--history-index 0))
-                  (should (eq (gent--state) 'idle))
+                  (should (eq (gent-session-phase gent-session-current) 'idle))
                   (should-not (gent-session-queue session))
                   (should-not (gent-session-id session))
                   (should-not (gent-session-request-process session))
@@ -1179,7 +1179,7 @@ completion."
                                                   'content)))
                   (should (equal (map-elt (car (last (plist-get sent :messages))) 'content)
                                  "proposed prompt"))
-                  (should (cl-find gent--elided (plist-get sent :messages)
+                  (should (cl-find gent-session--elided (plist-get sent :messages)
                                    :key (lambda (m) (map-elt m 'content)) :test #'equal))
                   (should (cl-find "missing-call" (plist-get sent :messages)
                                    :key (lambda (m) (map-elt m 'tool_call_id))
@@ -1220,11 +1220,11 @@ completion."
     (insert " \n ")
     (should-error (gent-send-dry-run) :type 'user-error)
     (gent--set-input "preview me")
-    (gent--transition 'start)
+    (gent-session-transition gent-session-current 'start)
     (should-error (gent-send-dry-run) :type 'user-error)
-    (gent--transition 'await-approval '(:name "edit_file"))
+    (gent-session-transition gent-session-current 'await-approval '(:name "edit_file"))
     (should-error (gent-send-dry-run) :type 'user-error)
-    (gent--transition 'interrupt)
+    (gent-session-transition gent-session-current 'interrupt)
     (setf (gent-session-queue gent-session-current) '("queued prompt"))
     (should-error (gent-send-dry-run) :type 'user-error)
     (should (equal (gent--input) "preview me"))))
@@ -1255,7 +1255,7 @@ completion."
         (gent-mode)
         (should-not (eq gent-session-current first))
         (should-not (gent-session-messages gent-session-current))
-        (gent--append '((role . "user") (content . "second"))))
+        (gent-session-append gent-session-current '((role . "user") (content . "second"))))
       (should (eq gent-session-current first))
       (should (equal (gent-session-messages first)
                      '(((role . "user") (content . "first"))))))))
@@ -1291,12 +1291,12 @@ completion."
           (funcall (plist-get old :on-token) "stale-token")
           (funcall (plist-get old :on-done) "stale-answer")
           (funcall (plist-get old :on-error) "stale-error")
-          (should (eq (gent--state) 'running))
+          (should (eq (gent-session-phase gent-session-current) 'running))
           (should (equal (gent-session-messages session)
                          '(((role . "user") (content . "new")))))
           (should-not (string-search "stale-" (buffer-string)))
           (funcall (plist-get (car requests) :on-done) "current")
-          (should (eq (gent--state) 'idle))
+          (should (eq (gent-session-phase gent-session-current) 'idle))
           (should (equal (map-elt (car (last (gent-session-messages session))) 'content)
                          "current")))))))
 
@@ -1504,7 +1504,7 @@ completion."
                (gent-test--fake-chat (list '(("Hi there"))) (list nil))))
       (gent-test--with-gent-buffer
         (gent-test--type "hello")
-        (should (eq (gent--state) 'running))
+        (should (eq (gent-session-phase gent-session-current) 'running))
         ;; Input stays editable while the model answers.
         (insert "next")
         (gent-test--wait-idle)
@@ -1546,20 +1546,20 @@ completion."
                             ("Finished edit turn.") ("Finished queued turn.")))
                     requests)))
           (gent-test--with-gent-buffer
-            (should (eq (gent--state) 'idle))
+            (should (eq (gent-session-phase gent-session-current) 'idle))
             (gent-test--type "edit")
             (with-timeout (5 (error "Timed out waiting for approval"))
-              (while (eq (gent--state) 'running)
+              (while (eq (gent-session-phase gent-session-current) 'running)
                 (accept-process-output nil 0.05)))
-            (should (eq (gent--state) 'awaiting-approval))
+            (should (eq (gent-session-phase gent-session-current) 'awaiting-approval))
             (should (string-search "Approval needed" (gent--header-line)))
             (gent-test--type "next")
             (should (equal (gent-session-queue gent-session-current) '("next")))
             (should (= (length (car requests)) 1))
             (should (equal (gent-test--read-file "a.txt") "old"))
             (gent--answer (current-buffer) answer)
-            (should (eq (gent--state) 'running))
-            (should-not (gent--session-pending gent-session-current))
+            (should (eq (gent-session-phase gent-session-current) 'running))
+            (should-not (gent-session-pending gent-session-current))
             (should (string-search "Working" (gent--header-line)))
             (gent-test--wait-idle)
             (should-not (gent-session-queue gent-session-current))
@@ -1582,14 +1582,14 @@ completion."
         (gent-test--type "second")
         (let ((first (car requests)))
           (funcall (plist-get first :on-error) "request failed")
-          (should (eq (gent--state) 'running))
+          (should (eq (gent-session-phase gent-session-current) 'running))
           (should-not (gent-session-queue gent-session-current))
           (should (= (length requests) 2))
           ;; A late callback from the failed request cannot finish its successor.
           (funcall (plist-get first :on-done) "stale answer")
-          (should (eq (gent--state) 'running))
+          (should (eq (gent-session-phase gent-session-current) 'running))
           (funcall (plist-get (car requests) :on-done) "second answer")
-          (should (eq (gent--state) 'idle))
+          (should (eq (gent-session-phase gent-session-current) 'idle))
           ;; Completed turns also ignore late callbacks from the same generation.
           (let ((transcript (buffer-string)))
             (funcall (plist-get (car requests) :on-error) "late error")
@@ -1652,7 +1652,7 @@ completion."
                  (lambda (&rest _) (setq asked t) t)))
         (gent-reset)
         (should-not asked))
-      (gent--append '((role . "user") (content . "keep")))
+      (gent-session-append gent-session-current '((role . "user") (content . "keep")))
       ;; Declining keeps the conversation.
       (cl-letf (((symbol-function 'y-or-n-p)
                  (lambda (&rest _) (setq asked t) nil)))
@@ -1668,7 +1668,7 @@ completion."
         (should asked)
         (should-not (gent-session-messages gent-session-current)))
       ;; A prefix argument skips the question.
-      (gent--append '((role . "user") (content . "again")))
+      (gent-session-append gent-session-current '((role . "user") (content . "again")))
       (cl-letf (((symbol-function 'y-or-n-p)
                  (lambda (&rest _) (error "Should not ask"))))
         (gent-reset t)
@@ -1687,15 +1687,15 @@ completion."
                        "first"))
         (gent-test--type "second")
         (gent--await-approval (current-buffer) #'ignore "edit_file" 'diff "diff" #'ignore)
-        (should-error (gent--transition 'finish))
-        (should (eq (gent--state) 'awaiting-approval))
+        (should-error (gent-session-transition gent-session-current 'finish))
+        (should (eq (gent-session-phase gent-session-current) 'awaiting-approval))
         (gent-interrupt)
-        (should (eq (gent--state) 'idle))
+        (should (eq (gent-session-phase gent-session-current) 'idle))
         (should-not (gent-session-queue gent-session-current))
-        (should-not (gent--session-pending gent-session-current))
+        (should-not (gent-session-pending gent-session-current))
         (should-error (gent-approve) :type 'user-error)
         (funcall (plist-get request :on-done) "stale answer")
-        (should (eq (gent--state) 'idle))
+        (should (eq (gent-session-phase gent-session-current) 'idle))
         (should-not (string-search "stale answer" (buffer-string)))))))
 
 (ert-deftest gent-test-buffer-history ()

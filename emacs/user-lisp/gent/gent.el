@@ -61,23 +61,6 @@ conversation; registry entries and `gent-llm-default-backend' are unchanged.")
   :type 'integer
   :group 'gent)
 
-(defcustom gent-context-max-tokens 100000
-  "Rough token budget for a conversation.
-When the estimated size of the conversation passes
-`gent-context-compact-ratio' of this, older tool results are elided."
-  :type 'integer
-  :group 'gent)
-
-(defcustom gent-context-compact-ratio 0.75
-  "Fraction of `gent-context-max-tokens' at which old tool results are elided."
-  :type 'number
-  :group 'gent)
-
-(defcustom gent-context-keep-tool-results 6
-  "Number of most recent tool results never elided by compaction."
-  :type 'integer
-  :group 'gent)
-
 (defcustom gent-tool-display-max-chars 4000
   "Maximum characters of a tool result shown in the gent buffer."
   :type 'integer
@@ -128,37 +111,6 @@ Use `gent-review' to see all of it."
   "Return BUFFER's session, or nil if it has none."
   (buffer-local-value 'gent-session-current buffer))
 
-(defun gent--state ()
-  "Return the current session's execution phase, without its approval data."
-  (let ((state (gent-session-state gent-session-current)))
-    (if (consp state) (car state) state)))
-
-(defun gent--session-pending (session)
-  "Return SESSION's approval data, or nil when it is not awaiting approval."
-  (let ((state (gent-session-state session)))
-    (when (eq (car-safe state) 'awaiting-approval)
-      (cdr state))))
-
-(defun gent--transition (event &optional approval)
-  "Apply EVENT to the current session's execution state.
-start: idle -> running; await-approval: running -> awaiting-approval;
-answer: awaiting-approval -> running; finish: running -> idle.
-interrupt returns any state to idle.  APPROVAL carries the pending
-tool details for await-approval.  Invalid transitions signal an error."
-  (let* ((session gent-session-current)
-         (phase (gent--state))
-         (state
-          (pcase (cons phase event)
-            ('(idle . start) 'running)
-            ('(running . await-approval)
-             (unless approval (error "Gent: missing approval data"))
-             (cons 'awaiting-approval approval))
-            ('(awaiting-approval . answer) 'running)
-            ('(running . finish) 'idle)
-            (`(,_ . interrupt) 'idle)
-            (_ (error "Gent: cannot %s while %s" event phase)))))
-    (setf (gent-session-state session) state)))
-
 (defvar-local gent--review-source nil
   "In a review buffer, the gent buffer whose pending change it shows.")
 
@@ -174,13 +126,7 @@ tool details for await-approval.  Invalid transitions signal an error."
 (defvar-local gent--history-index nil
   "Index in `gent--history' of the prompt being recalled, or nil.")
 
-;;; Messages
-
-(defun gent--ensure-session-id ()
-  "Return this conversation's ID, generating one if needed."
-  (let ((session gent-session-current))
-    (or (gent-session-id session)
-        (setf (gent-session-id session) (gent-llm-make-session-id)))))
+;;; Context
 
 (defun gent--root ()
   "Return the project root for the current buffer."
@@ -188,116 +134,15 @@ tool details for await-approval.  Invalid transitions signal an error."
       (let ((project (project-current)))
         (expand-file-name (if project (project-root project) default-directory)))))
 
-(defun gent--system-message (root)
-  "Return the system message for a conversation in ROOT."
-  `((role . "system")
-    (content . ,(gent-session-system-prompt-string gent-session-current root))))
-
-(defun gent--message-chars (message)
-  "Return the approximate size of MESSAGE in characters."
-  (+ (length (or (map-elt message 'content) ""))
-     (length (or (map-elt message 'reasoning_content) ""))
-     (apply #'+ (mapcar (lambda (call)
-                          (length (or (map-elt (map-elt call 'function) 'arguments) "")))
-                        (append (map-elt message 'tool_calls) nil)))))
-
-(defun gent--estimate-tokens (messages)
-  "Return a rough token count for MESSAGES."
-  (/ (apply #'+ (mapcar #'gent--message-chars messages)) 4))
-
-(defconst gent--elided "[output elided to save context]"
-  "Content that replaces tool results removed by compaction.")
-
-(defun gent--compact (messages &optional overhead)
-  "Return MESSAGES with old tool results elided when they are too large.
-Tool results are elided oldest first, keeping the last
-`gent-context-keep-tool-results', until the estimate plus OVERHEAD
-tokens fits under `gent-context-compact-ratio' of
-`gent-context-max-tokens'."
-  (let ((limit (* gent-context-compact-ratio gent-context-max-tokens))
-        (tokens (+ (or overhead 0) (gent--estimate-tokens messages))))
-    (if (<= tokens limit)
-        messages
-      (let* ((tool-count (cl-count "tool" messages
-                                   :key (lambda (m) (map-elt m 'role))
-                                   :test #'equal))
-             (elidable (- tool-count gent-context-keep-tool-results)))
-        (mapcar (lambda (message)
-                  (if (and (> elidable 0)
-                           (> tokens limit)
-                           (equal (map-elt message 'role) "tool"))
-                      (progn
-                        (cl-decf elidable)
-                        (if (equal (map-elt message 'content) gent--elided)
-                            message
-                          (cl-decf tokens (/ (- (gent--message-chars message)
-                                                (length gent--elided))
-                                             4))
-                          (cons (cons 'content gent--elided)
-                                (map-delete (copy-alist message) 'content))))
-                    message))
-                messages)))))
-
-(defun gent--repair (messages)
-  "Return MESSAGES with a result for every tool call.
-A cancelled turn can leave tool calls without results, which the API
-rejects; those get a placeholder result right after the call."
-  (let ((answered (delq nil (mapcar (lambda (m) (map-elt m 'tool_call_id)) messages)))
-        (out nil))
-    (dolist (message messages)
-      (push message out)
-      (dolist (call (append (map-elt message 'tool_calls) nil))
-        (let ((id (map-elt call 'id)))
-          (unless (member id answered)
-            (push `((role . "tool") (tool_call_id . ,id)
-                    (content . "Cancelled by the user."))
-                  out)))))
-    (nreverse out)))
-
-(defun gent--append (message)
-  "Append MESSAGE to the conversation in the current buffer."
-  (let ((session gent-session-current))
-    (setf (gent-session-messages session)
-          (append (gent-session-messages session) (list message)))))
-
-(defun gent--overhead-tokens (system &optional tools)
-  "Return the estimated tokens of SYSTEM and TOOLS, defaulting to the registry."
-  (/ (+ (gent--message-chars system)
-        (length (json-encode (or tools (gent-tools-definitions)))))
-     4))
-
-(defun gent--prepare-turn (messages prompt)
-  "Return repaired MESSAGES followed by user PROMPT, without changing MESSAGES."
-  (append (gent--repair messages)
-          (list `((role . "user") (content . ,prompt)))))
-
-(defun gent--prepare-request (messages)
-  "Prepare MESSAGES for a request from this buffer without changing them.
-Return a plist with system-prefixed :messages, :tools, estimated :tokens,
-and :elided tool result IDs (or message positions) changed by compaction."
-  (let* ((system (gent--system-message (gent--root)))
-         (tools (gent-tools-definitions))
-         (overhead (gent--overhead-tokens system tools))
-         (compacted (gent--compact messages overhead)))
-    (list :messages (cons system compacted)
-          :tools tools
-          :tokens (+ overhead (gent--estimate-tokens compacted))
-          :elided (cl-loop for before in messages
-                           for after in compacted
-                           for index from 1
-                           unless (equal before after)
-                           collect (or (map-elt before 'tool_call_id) index)))))
-
 (defun gent--update-mode-line ()
   "Show the estimated context size in the mode line."
-  (let ((tokens (+ (gent--overhead-tokens (gent--system-message (gent--root)))
-                   (gent--estimate-tokens (gent-session-messages gent-session-current)))))
+  (let ((tokens (gent-session-context-tokens gent-session-current)))
     (setq mode-line-process
           (list (format " ~%.1fk/%dk" (/ tokens 1000.0) (/ gent-context-max-tokens 1000))
-                (unless (eq (gent--state) 'idle) " …")
+                (unless (eq (gent-session-phase gent-session-current) 'idle) " …")
                 (when-let* ((queue (gent-session-queue gent-session-current)))
                   (format " +%d queued" (length queue)))
-                (when (gent--session-pending gent-session-current)
+                (when (gent-session-pending gent-session-current)
                   (propertize " [approve?]" 'face 'gent-approval-face)))))
   (force-mode-line-update))
 
@@ -316,7 +161,7 @@ and :elided tool result IDs (or message positions) changed by compaction."
 (defun gent--header-hat (shape)
   "Return hat SHAPE colored for the current execution state."
   (propertize shape 'face
-              (pcase (gent--state)
+              (pcase (gent-session-phase gent-session-current)
                 ('idle 'shadow)
                 ('running 'gent-prompt-face)
                 ('awaiting-approval 'gent-approval-face))))
@@ -331,7 +176,7 @@ Displayed in the tab line, above `gent--header-details'."
      (propertize (file-name-nondirectory (directory-file-name root))
                  'face 'bold 'help-echo root)
      "  │  "
-     (pcase (gent--state)
+     (pcase (gent-session-phase session)
        ('awaiting-approval (propertize "Approval needed" 'face 'gent-approval-face))
        ('running "Working")
        ('idle "Ready"))
@@ -457,17 +302,17 @@ SHELL is an alist of output functions, `:write-output' and
 `:finish-output'; see `gent--shell'."
   (with-current-buffer buffer
     (let ((session gent-session-current))
-      (gent--transition 'start)
+      (gent-session-transition session 'start)
       (cl-incf (gent-session-turn session))
       (setf (gent-session-messages session)
-            (gent--prepare-turn (gent-session-messages session) prompt))
+            (gent-session-prepare-turn (gent-session-messages session) prompt))
       (gent--request buffer (gent-session-turn session) shell 1))))
 
 (defun gent--finish (buffer shell success)
   "Finish the turn in BUFFER through SHELL with SUCCESS."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
-      (gent--transition 'finish)
+      (gent-session-transition gent-session-current 'finish)
       (gent--update-mode-line)))
   (funcall (map-elt shell :finish-output) success))
 
@@ -485,8 +330,9 @@ SHELL receives the output.  ITERATION counts requests in this turn."
                               (funcall write (gent--format-reasoning "\n\n")))))
            (calls nil)
            (backend (or (gent-session-backend session) gent-llm-default-backend))
-           (session-id (gent--ensure-session-id))
-           (request (gent--prepare-request (gent-session-messages session))))
+           (session-id (gent-session-ensure-id session))
+           (request (gent-session-prepare-request
+                     session (gent-session-messages session))))
       (setf (gent-session-messages session)
             (cdr (plist-get request :messages)))
       (gent--update-mode-line)
@@ -538,17 +384,19 @@ SHELL receives the output.  ITERATION counts requests in this turn."
   "Record the model's TEXT, tool CALLS and REASONING, then continue or finish.
 BUFFER, TURN, SHELL and ITERATION are as in `gent--request'."
   (with-current-buffer buffer
-    (gent--append `((role . "assistant")
-                    (content . ,(or text ""))
-                    ,@(when (and reasoning (not (string-empty-p reasoning)))
-                        `((reasoning_content . ,reasoning)))
-                    ,@(when calls `((tool_calls . ,(vconcat calls))))))
+    (gent-session-append
+     gent-session-current
+     `((role . "assistant")
+       (content . ,(or text ""))
+       ,@(when (and reasoning (not (string-empty-p reasoning)))
+           `((reasoning_content . ,reasoning)))
+       ,@(when calls `((tool_calls . ,(vconcat calls))))))
     (cond
      ((null calls)
       (gent--finish buffer shell t))
      ((>= iteration gent-max-iterations)
       (setf (gent-session-messages gent-session-current)
-            (gent--repair (gent-session-messages gent-session-current)))
+            (gent-session-repair (gent-session-messages gent-session-current)))
       (funcall (map-elt shell :write-output)
                (format "\n\ngent: stopped after %d requests (`gent-max-iterations').\n"
                        iteration))
@@ -583,9 +431,11 @@ Stop silently if TURN is no longer current."
                     (when (gent--live-p buffer turn)
                       (with-current-buffer buffer
                         (setf (gent-session-tool-cancel gent-session-current) nil)
-                        (gent--append `((role . "tool")
-                                        (tool_call_id . ,(map-elt call 'id))
-                                        (content . ,result))))
+                        (gent-session-append
+                         gent-session-current
+                         `((role . "tool")
+                           (tool_call_id . ,(map-elt call 'id))
+                           (content . ,result))))
                       (funcall write (gent--format-tool-result result))
                       (gent--run-calls buffer turn shell (cdr calls) then)))))
                (lambda (_name kind text respond)
@@ -601,8 +451,8 @@ Stop silently if TURN is no longer current."
 KIND and TEXT describe the change and are shown through WRITE.
 RESPOND is called with the answer by `gent-approve' or `gent-reject'."
   (with-current-buffer buffer
-    (gent--transition
-     'await-approval
+    (gent-session-transition
+     gent-session-current 'await-approval
      (list :name name :kind kind :text text :respond respond :write write))
     (gent--update-mode-line))
   (funcall write (gent--format-approval kind text))
@@ -615,7 +465,7 @@ RESPOND is called with the answer by `gent-approve' or `gent-reject'."
 (defun gent--pending-in-buffer (buffer)
   "Return BUFFER's pending approval without initializing a session."
   (let ((session (gent--buffer-session buffer)))
-    (and session (gent--session-pending session))))
+    (and session (gent-session-pending session))))
 
 (defun gent--pending-buffers ()
   "Return the gent buffers with a change awaiting approval."
@@ -650,13 +500,13 @@ for the current project, or one the user picks."
 See `gent-tools-call' for the meaning of ANSWER."
   (with-current-buffer buffer
     (let* ((session gent-session-current)
-           (pending (gent--session-pending session)))
+           (pending (gent-session-pending session)))
       (unless pending
         (user-error "Nothing is awaiting approval in %s" (buffer-name buffer)))
       (when (eq answer 'always)
         (cl-pushnew (plist-get pending :name) (gent-session-trusted session)
                     :test #'equal))
-      (gent--transition 'answer)
+      (gent-session-transition session 'answer)
       (gent--update-mode-line)
       (gent--close-review buffer)
       (funcall (plist-get pending :write)
@@ -829,7 +679,7 @@ While a turn is running the prompt is queued and sent after it."
         (setq gent--history-index nil)
         (gent--set-input "")
         (setq buffer-undo-list nil)
-        (if (eq (gent--state) 'idle)
+        (if (eq (gent-session-phase gent-session-current) 'idle)
             (gent--send-prompt prompt)
           (let ((session gent-session-current))
             (setf (gent-session-queue session)
@@ -871,7 +721,7 @@ While a turn is running the prompt is queued and sent after it."
 
 (defun gent--save-failed-request (backend session-id request error)
   "Record REQUEST, which BACKEND rejected with ERROR, and return its buffer.
-REQUEST is a plist from `gent--prepare-request' and SESSION-ID the
+REQUEST is a plist from `gent-session-prepare-request' and SESSION-ID the
 conversation it was sent for.  Each failure replaces the previous record
 for this project."
   (let ((root (gent--root))
@@ -916,7 +766,7 @@ No tools, network requests or credential callbacks are run."
   (gent--ensure-buffer)
   (let* ((session gent-session-current)
          (prompt (string-trim (gent--input))))
-    (when (or (not (eq (gent--state) 'idle)) (gent-session-queue session))
+    (when (or (not (eq (gent-session-phase session) 'idle)) (gent-session-queue session))
       (user-error "Wait for the current turn and queued prompts before previewing"))
     (when (string-empty-p prompt)
       (user-error "No prompt to preview"))
@@ -927,8 +777,9 @@ No tools, network requests or credential callbacks are run."
            (session-id (gent-session-id session))
            (budget gent-context-max-tokens)
            (threshold (* gent-context-compact-ratio budget))
-           (request (gent--prepare-request
-                     (gent--prepare-turn
+           (request (gent-session-prepare-request
+                     session
+                     (gent-session-prepare-turn
                       (copy-tree (gent-session-messages session) t) prompt)))
            (messages (plist-get request :messages))
            (tools (plist-get request :tools))
@@ -1082,15 +933,15 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
   (gent--ensure-buffer)
   (let ((session gent-session-current))
     (cl-incf (gent-session-turn session))
-    (when (gent--session-pending session)
+    (when (gent-session-pending session)
       (gent--close-review (current-buffer)))
-    (let ((active (not (eq (gent--state) 'idle))))
-      (gent--transition 'interrupt)
+    (let ((active (not (eq (gent-session-phase session) 'idle))))
+      (gent-session-transition session 'interrupt)
       (when (and active (gent--buffer-p))
         (gent--insert-output (current-buffer) "\n[interrupted]\n")))
     (gent--kill-request)
     (setf (gent-session-messages session)
-          (gent--repair (gent-session-messages session)))
+          (gent-session-repair (gent-session-messages session)))
     (setf (gent-session-queue session) nil)
     (gent--update-mode-line)))
 
@@ -1106,7 +957,7 @@ NO-CONFIRM, so \\[universal-argument] \\[gent-reset] resets without asking."
              (gent-session-messages session)
              (not (y-or-n-p "Reset the gent conversation? ")))
         (message "gent: reset cancelled")
-      (unless (eq (gent--state) 'idle)
+      (unless (eq (gent-session-phase session) 'idle)
         (gent-interrupt))
       (setf (gent-session-messages session) nil
             (gent-session-id session) nil
@@ -1182,12 +1033,12 @@ call is approved, otherwise changes are rejected.  ROOT defaults to
         (setf (gent-session-root session) (expand-file-name (or root default-directory)))
         (gent--start-turn (current-buffer) prompt shell)
         (while (not done)
-          (when (gent--session-pending session)
+          (when (gent-session-pending session)
             (princ (if approve "[approved]\n" "[rejected]\n"))
             (gent--answer (current-buffer) (and approve t)))
           (accept-process-output nil 0.1))
         (princ (format "\n[%s, ~%d tokens]\n" (if success "done" "failed")
-                       (gent--estimate-tokens (gent-session-messages session))))
+                       (gent-session-estimate-tokens (gent-session-messages session))))
         (gent-session-messages session)))))
 
 (provide 'gent)

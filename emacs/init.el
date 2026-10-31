@@ -489,11 +489,13 @@ unindented namespace bodies."
         `(("dumile/qwen-flash-next"
            . ,(gent-llm-make-dumile-backend
                :api-key (lambda () (pi-api-key 'dumile))
-               :model "qwen-flash-next"))
+               :model "qwen-flash-next"
+               :reasoning-effort "high"))
           ("opencodego/deepseek-v4.1-flash"
            . ,(gent-llm-make-opencode-go-backend
                :api-key (lambda () (pi-api-key 'opencode-go))
-               :model "deepseek-v4.1-flash"))))
+               :model "deepseek-v4.1-flash"
+               :reasoning-effort "high"))))
   (set-gent-backend "opencodego/deepseek-v4.1-flash"))
 
 ;;; init.el ends here

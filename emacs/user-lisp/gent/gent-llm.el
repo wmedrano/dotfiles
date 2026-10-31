@@ -92,11 +92,6 @@ headers.  The default returns nil for backends without a wire preview.")
 (defvar gent-llm-default-backend nil
   "The `gent-llm-generic-backend' used when `gent-llm-chat' is not given one.")
 
-(defun gent-llm-make-session-id ()
-  "Return a new opaque conversation ID.
-Reuse this ID for every request in the same conversation."
-  (md5 (format "%s:%s:%s" (emacs-pid) (current-time) (random))))
-
 (defun gent-llm--validate-session-id (session-id)
   "Signal an error unless SESSION-ID is nil or a nonempty, single-line string."
   (when (and session-id
@@ -187,8 +182,7 @@ BACKEND implements `gent-llm-generic-backend'; it defaults to
 
 SESSION-ID is an optional nonempty, single-line string identifying the
 conversation.  Reuse it across turns, tool calls and retries.  Backends
-may use or ignore it; some require it.  Callers own its lifecycle and
-can generate one with `gent-llm-make-session-id'.
+may use or ignore it; some require it.  Callers own its lifecycle.
 
 MESSAGES is a list or vector of alists.  Besides ((role . R)
 \(content . C)), tool-aware messages are supported: an assistant turn
