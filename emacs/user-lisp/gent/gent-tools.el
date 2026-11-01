@@ -351,10 +351,6 @@ Signal an error if it falls outside the project root or /tmp."
       (error "Path %s is outside the allowed directories" path))
     file))
 
-(defun gent-tools--relative (file)
-  "Return FILE relative to `default-directory'."
-  (file-relative-name file default-directory))
-
 (defun gent-tools--file-string (file)
   "Return the contents of FILE as a string."
   (with-temp-buffer
@@ -366,7 +362,8 @@ Signal an error if it falls outside the project root or /tmp."
   (let ((buffer (find-buffer-visiting file)))
     (when (and buffer (buffer-modified-p buffer))
       (error "%s has unsaved changes in buffer %s; ask the user to save it first"
-             (gent-tools--relative file) (buffer-name buffer)))))
+             (file-relative-name file default-directory)
+             (buffer-name buffer)))))
 
 (defun gent-tools--check-scope (path)
   "Resolve PATH and verify no buffer visiting it has unsaved changes.
@@ -394,7 +391,7 @@ Return the expanded file path."
   "Return a unified diff for FILE going from OLD to NEW."
   (let ((old-file (make-temp-file "gent-old"))
         (new-file (make-temp-file "gent-new"))
-        (name (gent-tools--relative file)))
+        (name (file-relative-name file default-directory)))
     (unwind-protect
         (progn
           (let ((coding-system-for-write 'utf-8-unix))
@@ -442,7 +439,7 @@ Signal an error unless OLD occurs exactly once."
                                               directory-files-no-dot-files-regexp))
                      "\n")))
      ((not (file-exists-p file))
-      (error "%s does not exist" (gent-tools--relative file)))
+      (error "%s does not exist" (file-relative-name file default-directory)))
      (t
       (with-temp-buffer
         (insert-file-contents file)
@@ -482,7 +479,7 @@ line number and a tab; the prefix is not part of the file.  Use `offset' and \
   (let ((file (gent-tools--check-scope (map-elt args 'path))))
     (unless (file-regular-p file)
       (error "%s does not exist; use write_file to create it"
-             (gent-tools--relative file)))
+             (file-relative-name file default-directory)))
     (let ((old (gent-tools--file-string file)))
       (list file old (gent-tools--replace old (map-elt args 'old_string)
                                           (map-elt args 'new_string))))))
@@ -502,7 +499,9 @@ before editing it."
  :handler (lambda (args done)
             (pcase-let ((`(,file ,_old ,new) (gent-tools--edit-new-content args)))
               (gent-tools--write file new)
-              (funcall done (format "Edited %s" (gent-tools--relative file))))))
+              (funcall done
+                       (format "Edited %s"
+                               (file-relative-name file default-directory))))))
 
 ;;; write_file
 
@@ -522,10 +521,12 @@ Prefer edit_file for changes to existing files."
             (let ((file (gent-tools--resolve (map-elt args 'path)))
                   (content (or (map-elt args 'content) "")))
               (when (file-directory-p file)
-                (error "%s is a directory" (gent-tools--relative file)))
+                (error "%s is a directory"
+                       (file-relative-name file default-directory)))
               (gent-tools--write file content)
               (funcall done (format "Wrote %d characters to %s"
-                                    (length content) (gent-tools--relative file))))))
+                                    (length content)
+                                    (file-relative-name file default-directory))))))
 
 ;;; run_shell
 
