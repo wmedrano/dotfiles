@@ -423,26 +423,26 @@ Signal an error unless OLD occurs exactly once."
 
 ;;; read_file
 
-(defun gent-tools--read-file (args done)
-  "Call DONE with the lines of the file named in ARGS."
-  (let* ((file (gent-tools--resolve (map-elt args 'path)))
-         (offset (max 1 (or (map-elt args 'offset) 1)))
-         (limit (or (map-elt args 'limit) gent-tools-read-default-limit)))
-    (cond
-     ((file-directory-p file)
-      (funcall done (string-join
-                     (mapcar (lambda (name)
-                               (if (file-directory-p (expand-file-name name file))
-                                   (concat name "/")
-                                 name))
-                             (directory-files file nil
-                                              directory-files-no-dot-files-regexp))
-                     "\n")))
-     ((not (file-exists-p file))
-      (error "%s does not exist" (file-relative-name file default-directory)))
-     (t
-      (with-temp-buffer
-        (insert-file-contents file)
+(defun gent-tools--read-file-directory (dir)
+  "Get a string representation of the contents of DIR."
+  (string-join
+   (mapcar (lambda (name)
+             (if (file-directory-p (expand-file-name name dir))
+                 (concat name "/")
+               name))
+           (directory-files dir nil
+                            directory-files-no-dot-files-regexp))
+   "\n"))
+
+(defun gent-tools--read-file-lines (file offset limit)
+  "Return the lines of FILE starting at OFFSET, at most LIMIT of them.
+Each line is prefixed with its line number and a tab.  FILE is read
+through a visiting buffer, so unsaved edits in a live buffer are
+reported rather than the copy on disk."
+  (with-current-buffer (find-file-noselect file)
+    (save-excursion
+      (save-restriction
+        (widen)
         (let ((total (count-lines (point-min) (point-max)))
               (lines nil)
               (line offset))
@@ -455,12 +455,24 @@ Signal an error unless OLD occurs exactly once."
                   lines)
             (setq line (1+ line))
             (forward-line 1))
-          (funcall done
-                   (concat (string-join (nreverse lines) "\n")
-                           (if (< (1- line) total)
-                               (format "\n[%d more lines; use offset %d to continue]"
-                                       (- total (1- line)) line)
-                             "")))))))))
+          (concat (string-join (nreverse lines) "\n")
+                  (if (< (1- line) total)
+                      (format "\n[%d more lines; use offset %d to continue]"
+                              (- total (1- line)) line)
+                    "")))))))
+
+(defun gent-tools--read-file (args done)
+  "Call DONE with the lines of the file named in ARGS."
+  (let* ((file (gent-tools--resolve (map-elt args 'path)))
+         (offset (max 1 (or (map-elt args 'offset) 1)))
+         (limit (or (map-elt args 'limit) gent-tools-read-default-limit)))
+    (cond
+     ((file-directory-p file)
+      (funcall done (gent-tools--read-file-directory file)))
+     ((not (file-exists-p file))
+      (error "%s does not exist" (file-relative-name file default-directory)))
+     (t
+      (funcall done (gent-tools--read-file-lines file offset limit))))))
 
 (gent-define-tool
  "read_file"

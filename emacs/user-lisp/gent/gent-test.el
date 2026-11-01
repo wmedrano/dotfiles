@@ -571,7 +571,20 @@ Approval requests go to `gent-test--confirm'."
     (let ((part (gent-test--call "read_file" '((path . "a.txt") (offset . 2) (limit . 1)))))
       (should (string-prefix-p "     2\ttwo" part))
       (should (string-search "use offset 3" part)))
-    (should (string-search "a.txt" (gent-test--call "read_file" '((path . "."))))) ))
+    (should (string-search "a.txt" (gent-test--call "read_file" '((path . ".")))))
+    ;; A live buffer visiting the file is read as it stands, unsaved edits and
+    ;; all, rather than the copy on disk.
+    (let ((buffer (find-file-noselect (expand-file-name "a.txt"))))
+      (unwind-protect
+          (progn
+            (with-current-buffer buffer
+              (goto-char (point-max))
+              (insert "four\n"))
+            (should (equal (gent-test--call "read_file" '((path . "a.txt")))
+                           "     1\tone\n     2\ttwo\n     3\tthree\n     4\tfour")))
+        (with-current-buffer buffer
+          (set-buffer-modified-p nil))
+        (kill-buffer buffer)))))
 
 (ert-deftest gent-test-path-outside-root ()
   ;; The temporary project lives under /tmp, which is itself an allowed root,
