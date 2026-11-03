@@ -24,3 +24,7 @@ if [[ -d "/home/wmedrano/src/chromium/src/third_party/depot_tools" ]]; then
     esac
 fi
 alias open='xdg-open'
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/wmedrano/.local/bin:$PATH"

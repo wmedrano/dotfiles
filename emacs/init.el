@@ -12,8 +12,8 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window auto-highlight-symbol company consult corfu diff-hl dracula-theme
-                eglot marginalia markdown-ts-mode nerd-icons
+   '(ace-window agent-shell auto-highlight-symbol company consult corfu diff-hl
+                dracula-theme eglot marginalia markdown-ts-mode nerd-icons
                 nerd-icons-completion orderless posframe rg rust-mode ttx-mode
                 vertico vundo))
  '(safe-local-variable-values
@@ -488,10 +488,16 @@ unindented namespace bodies."
 (use-package htmlize
   :ensure t)
 
+(use-package agent-shell
+  :ensure t
+  :custom
+  (agent-shell-antigravity-acp-command '("agy" "acp")))
+
 (use-package gent
   :load-path "user-lisp/gent"
   :commands (gent)
-  :functions (gent-llm-make-dumile-backend gent-llm-make-opencode-go-backend
+  :functions (gent-make-openai-backend
+              gent-llm-make-dumile-backend gent-llm-make-opencode-go-backend
               gent-tools-names)
   :defines (gent-backends gent-llm-default-backend gent-tools-trusted)
   :preface
@@ -512,7 +518,15 @@ unindented namespace bodies."
   (require 'gent-providers)
   (setq gent-tools-trusted (gent-tools-names))
   (setq gent-backends
-        `(("dumile/qwen-flash-next"
+        `(("local/dory"
+           . ,(gent-make-openai-backend
+               :name "local"
+               :url-base "http://127.0.0.1:8080/v1"
+               :model "dory"
+               :max-tokens 2048
+               :temperature 1.0
+               :reasoning-effort nil))
+          ("dumile/qwen-flash-next"
            . ,(gent-llm-make-dumile-backend
                :api-key (lambda () (pi-api-key 'dumile))
                :model "qwen-flash-next"
