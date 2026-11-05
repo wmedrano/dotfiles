@@ -91,7 +91,8 @@
   (which-key-mode)
   :config
   ;; Describe the code-tooling prefix (see `code-prefix-map').
-  (which-key-add-key-based-replacements "C-c e" "code"))
+  (which-key-add-key-based-replacements "C-c e" "code")
+  (which-key-add-key-based-replacements "C-c a" "agent"))
 
 (use-package isearch
   :custom
@@ -493,7 +494,24 @@ unindented namespace bodies."
 (use-package agent-shell
   :ensure t
   :custom
-  (agent-shell-antigravity-acp-command '("agy" "acp")))
+  (agent-shell-antigravity-acp-command '("agy" "acp"))
+  :bind
+  (:prefix-map agent-shell-prefix-map
+   :prefix "C-c a"
+   ("a" . agent-shell)
+   ("t" . agent-shell-toggle)
+   ("g" . agent-shell-antigravity-start-agent)
+   ("n" . agent-shell-new-shell)
+   ("b" . agent-shell-switch-buffer)
+   ("r" . agent-shell-send-region)
+   ("f" . agent-shell-send-file)
+   ("d" . agent-shell-send-dwim)
+   ("c" . agent-shell-prompt-compose)
+   ("s" . agent-shell-send-screenshot)
+   ("w" . agent-shell-new-worktree-shell)
+   ("k" . agent-shell-fork)
+   ("R" . agent-shell-restart)))
+
 
 (use-package gent
   :load-path "user-lisp/gent"
