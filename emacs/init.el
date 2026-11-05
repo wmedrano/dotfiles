@@ -129,6 +129,7 @@
          (jj-log-mode . display-line-numbers-off)
          (help-mode . display-line-numbers-off)
          (gent-mode . display-line-numbers-off)
+         (agent-shell-mode . display-line-numbers-off)
          (dired-mode . display-line-numbers-off)
          (xref--xref-buffer-mode . display-line-numbers-off)
          (flymake-diagnostics-buffer-mode . display-line-numbers-off)
