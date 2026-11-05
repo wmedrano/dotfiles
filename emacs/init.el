@@ -64,6 +64,7 @@
   (ring-bell-function #'ignore)
   (read-process-output-max (* 1024 1024))
   :config
+  (add-to-list 'exec-path (expand-file-name "~/.local/bin"))
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
   (set-face-attribute 'default nil :family "JetBrains Mono" :height 120))
 
