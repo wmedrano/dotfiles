@@ -72,7 +72,7 @@ Use `gent-review' to see all of it."
   :type 'integer
   :group 'gent)
 
-(defcustom gent-prompt "gent> "
+(defcustom gent-prompt "* gent> "
   "Prompt shown before the input area of a gent buffer."
   :type 'string
   :group 'gent)
@@ -126,6 +126,51 @@ Use `gent-review' to see all of it."
 (defvar-local gent--history-index nil
   "Index in `gent--history' of the prompt being recalled, or nil.")
 
+(defconst gent--spinner-frames ["⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏"]
+  "Frames for the active input prompt's processing indicator.")
+
+(defvar-local gent--prompt-overlay nil
+  "Overlay displaying the active prompt's status character.")
+
+(defvar-local gent--spinner-timer nil
+  "Timer animating the active input prompt while processing.")
+
+(defvar-local gent--spinner-frame 0
+  "Index of the current processing indicator frame.")
+
+(defun gent--stop-spinner ()
+  "Cancel the current buffer's prompt animation."
+  (when gent--spinner-timer
+    (cancel-timer gent--spinner-timer)
+    (setq gent--spinner-timer nil)))
+
+(defun gent--spinner-tick (buffer)
+  "Advance BUFFER's processing indicator without modifying its text."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (setq gent--spinner-frame
+            (mod (1+ gent--spinner-frame) (length gent--spinner-frames)))
+      (gent--update-prompt))))
+
+(defun gent--update-prompt ()
+  "Synchronize the active prompt indicator with the session state.
+Custom prompts without a leading asterisk keep their original appearance."
+  (when (and gent--prompt-overlay (overlay-buffer gent--prompt-overlay))
+    (let ((phase (gent-session-phase gent-session-current)))
+      (if (eq phase 'running)
+          (unless gent--spinner-timer
+            (setq gent--spinner-frame 0
+                  gent--spinner-timer
+                  (run-at-time 0.12 0.12 #'gent--spinner-tick (current-buffer))))
+        (gent--stop-spinner))
+      (overlay-put gent--prompt-overlay 'display
+                   (propertize
+                    (pcase phase
+                      ('running (aref gent--spinner-frames gent--spinner-frame))
+                      ('awaiting-approval "!")
+                      (_ "*"))
+                    'face 'gent-prompt-face)))))
+
 ;;; Context
 
 (defun gent--root ()
@@ -144,6 +189,7 @@ Use `gent-review' to see all of it."
                   (format " +%d queued" (length queue)))
                 (when (gent-session-pending gent-session-current)
                   (propertize " [approve?]" 'face 'gent-approval-face)))))
+  (gent--update-prompt)
   (force-mode-line-update))
 
 ;;; Display
@@ -643,10 +689,17 @@ The text is made read-only; the input area is left alone."
                    (buffer-substring gent--input-marker (point-max))
                  ""))
         (inhibit-read-only t))
+    (when gent--prompt-overlay
+      (delete-overlay gent--prompt-overlay)
+      (setq gent--prompt-overlay nil))
+    (gent--stop-spinner)
     (erase-buffer)
     (insert (apply #'propertize
                    (concat "\n" (propertize gent-prompt 'face 'gent-prompt-face))
                    gent--read-only-properties))
+    (when (string-prefix-p "*" gent-prompt)
+      (setq gent--prompt-overlay (make-overlay (1+ (point-min))
+                                               (+ 2 (point-min)) nil t nil)))
     (setq gent--input-marker (point-marker))
     (setq gent--output-marker (copy-marker (point-min) t))
     (insert input)
@@ -654,6 +707,7 @@ The text is made read-only; the input area is left alone."
     (dolist (message messages)
       (gent--insert-output (current-buffer) (gent--format-message message)))
     (setq buffer-undo-list nil)
+    (gent--update-prompt)
     (goto-char (point-max))))
 
 (defun gent--input ()
@@ -883,10 +937,12 @@ Type a prompt at the bottom of the buffer and send it with \\[gent-send].
   (setq gent--history (make-ring 100))
   (add-to-invisibility-spec 'gent-details)
   (visual-line-mode 1)
-  (add-hook 'kill-buffer-hook #'gent--kill-request nil t))
+  (add-hook 'kill-buffer-hook #'gent--kill-request nil t)
+  (add-hook 'change-major-mode-hook #'gent--kill-request nil t))
 
 (defun gent--kill-request ()
   "Stop the model request and tool call of the current buffer, if any."
+  (gent--stop-spinner)
   (let* ((session gent-session-current)
          (process (gent-session-request-process session))
          (cancel (gent-session-tool-cancel session)))
