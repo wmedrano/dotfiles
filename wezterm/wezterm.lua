@@ -7,8 +7,8 @@ wezterm.on('gui-startup', function(cmd)
   window:gui_window():maximize()
 end)
 
-config.font = wezterm.font 'JetBrains Mono'
-config.font_size = 14.0
+config.font = wezterm.font 'Iosevka Term Extended'
+config.font_size = 14
 config.color_scheme = 'Dracula (Official)'
 
 -- Make text like "cr/8604710" clickable as a Chromium Gerrit link.
