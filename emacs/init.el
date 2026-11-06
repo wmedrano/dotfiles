@@ -66,7 +66,7 @@
   :config
   (add-to-list 'exec-path (expand-file-name "~/.local/bin"))
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
-  (set-face-attribute 'default nil :family "JetBrains Mono" :height 120))
+  (set-face-attribute 'default nil :family "Iosevka Term Extended" :height 130))
 
 ;; `C-c e' is a single entry point for code tooling, so it spans several
 ;; packages (flymake, xref, ...) rather than one.  Each tool also keeps its
