@@ -496,6 +496,7 @@ unindented namespace bodies."
   :ensure t
   :custom
   (agent-shell-antigravity-acp-command '("agy" "acp"))
+  (agent-shell-openai-codex-acp-command '("npx" "-y" "@agentclientprotocol/codex-acp"))
   :bind
   (:prefix-map agent-shell-prefix-map
    :prefix "C-c a"
@@ -512,7 +513,6 @@ unindented namespace bodies."
    ("w" . agent-shell-new-worktree-shell)
    ("k" . agent-shell-fork)
    ("R" . agent-shell-restart)))
-
 
 (use-package gent
   :load-path "user-lisp/gent"
