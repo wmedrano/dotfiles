@@ -512,7 +512,11 @@ unindented namespace bodies."
    ("s" . agent-shell-send-screenshot)
    ("w" . agent-shell-new-worktree-shell)
    ("k" . agent-shell-fork)
-   ("R" . agent-shell-restart)))
+   ("R" . agent-shell-restart))
+  :bind
+  (:map agent-shell-mode-map
+   ("<remap> <kill-ring-save>" . agent-shell-copy-as-markdown)
+   ("C-c !" . agent-shell-insert-shell-command-output)))
 
 (use-package gent
   :load-path "user-lisp/gent"
