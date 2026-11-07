@@ -495,6 +495,16 @@ unindented namespace bodies."
 (use-package agent-shell
   :ensure t
   :custom
+  (agent-shell-agent-configs
+   '(agent-shell-antigravity-make-agent-config
+     agent-shell-opencode-make-agent-config
+     agent-shell-openai-make-codex-config))
+  (agent-shell-display-action
+   '((display-buffer-reuse-window
+      display-buffer-reuse-mode-window
+      display-buffer-pop-up-window)
+     (mode . agent-shell-mode)
+     (inhibit-same-window . t)))
   (agent-shell-antigravity-acp-command '("agy" "acp"))
   (agent-shell-openai-codex-acp-command '("npx" "-y" "@agentclientprotocol/codex-acp"))
   :bind
