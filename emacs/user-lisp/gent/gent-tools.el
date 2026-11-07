@@ -436,30 +436,41 @@ Signal an error unless OLD occurs exactly once."
 
 (defun gent-tools--read-file-lines (file offset limit)
   "Return the lines of FILE starting at OFFSET, at most LIMIT of them.
-Each line is prefixed with its line number and a tab.  FILE is read
-through a visiting buffer, so unsaved edits in a live buffer are
-reported rather than the copy on disk."
-  (with-current-buffer (find-file-noselect file)
-    (save-excursion
-      (save-restriction
-        (widen)
-        (let ((total (count-lines (point-min) (point-max)))
-              (lines nil)
-              (line offset))
-          (goto-char (point-min))
-          (forward-line (1- offset))
-          (while (and (not (eobp)) (< (- line offset) limit))
-            (push (format "%6d\t%s" line
-                          (buffer-substring-no-properties
-                           (line-beginning-position) (line-end-position)))
-                  lines)
-            (setq line (1+ line))
-            (forward-line 1))
-          (concat (string-join (nreverse lines) "\n")
-                  (if (< (1- line) total)
-                      (format "\n[%d more lines; use offset %d to continue]"
-                              (- total (1- line)) line)
-                    "")))))))
+Each line is prefixed with its line number and a tab.  A buffer that
+already visits FILE contributes its current text, including unsaved
+edits; otherwise FILE is read into a temporary buffer, so reading a
+file creates no buffer and runs no mode hooks or file-local variables."
+  (if-let* ((buffer (find-buffer-visiting file)))
+      (with-current-buffer buffer
+        (gent-tools--numbered-lines offset limit))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (gent-tools--numbered-lines offset limit))))
+
+(defun gent-tools--numbered-lines (offset limit)
+  "Return numbered lines of the current buffer from OFFSET, at most LIMIT.
+Each line is prefixed with its line number and a tab.  When lines are
+left over, a final note says which OFFSET reads them."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (let ((total (count-lines (point-min) (point-max)))
+            (lines nil)
+            (line offset))
+        (goto-char (point-min))
+        (forward-line (1- offset))
+        (while (and (not (eobp)) (< (- line offset) limit))
+          (push (format "%6d\t%s" line
+                        (buffer-substring-no-properties
+                         (line-beginning-position) (line-end-position)))
+                lines)
+          (setq line (1+ line))
+          (forward-line 1))
+        (concat (string-join (nreverse lines) "\n")
+                (if (< (1- line) total)
+                    (format "\n[%d more lines; use offset %d to continue]"
+                            (- total (1- line)) line)
+                  ""))))))
 
 (defun gent-tools--read-file (args done)
   "Call DONE with the lines of the file named in ARGS."
