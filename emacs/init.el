@@ -66,7 +66,7 @@
   :config
   (add-to-list 'exec-path (expand-file-name "~/.local/bin"))
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
-  (set-face-attribute 'default nil :family "Iosevka Term Extended" :height 130))
+  (set-face-attribute 'default nil :family "Iosevka Term Extended" :height 120))
 
 ;; `C-c e' is a single entry point for code tooling, so it spans several
 ;; packages (flymake, xref, ...) rather than one.  Each tool also keeps its
@@ -503,6 +503,18 @@ unindented namespace bodies."
 
 (use-package htmlize
   :ensure t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Search
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package rg
+  :ensure t
+  :defer t
+  :commands (rg))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Agents
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (use-package agent-shell
   :ensure t
