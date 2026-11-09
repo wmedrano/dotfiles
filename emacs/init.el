@@ -120,6 +120,7 @@
   :ensure t
   :defer 2
   :commands (doom-modeline-mode)
+  :functions (doom-modeline-remove-segment)
   :custom
   (doom-modeline-buffer-file-name-style 'relative-to-project)
   :init

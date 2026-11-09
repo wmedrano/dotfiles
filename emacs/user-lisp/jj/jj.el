@@ -375,7 +375,8 @@ output is uncolored so that `diff-mode' can font-lock it."
 
 (defvar jj-diff-mode-map
   (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map diff-mode-map)
+    (set-keymap-parent map
+                       (make-composed-keymap diff-read-only-map diff-mode-map))
     (define-key map (kbd "q") #'quit-window)
     (define-key map (kbd "g") #'jj-diff--refresh)
     (define-key map (kbd "s") #'jj-diff-squash)
@@ -388,6 +389,7 @@ output is uncolored so that `diff-mode' can font-lock it."
 
 \\{jj-diff-mode-map}"
   (setq-local buffer-read-only t)
+  (setq-local diff-mode-read-only nil)
   (setq-local revert-buffer-function
               (lambda (_ignore-auto _noconfirm) (jj-diff--refresh))))
 
