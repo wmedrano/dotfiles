@@ -13,9 +13,9 @@
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
    '(ace-window agent-shell auto-highlight-symbol company consult corfu diff-hl
-                dracula-theme eglot marginalia markdown-ts-mode nerd-icons
-                nerd-icons-completion orderless posframe rg rust-mode ttx-mode
-                vertico vundo))
+                doom-modeline dracula-theme eglot marginalia markdown-ts-mode
+                nerd-icons nerd-icons-completion orderless posframe rg rust-mode
+                ttx-mode vertico vundo))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -115,6 +115,17 @@
                       :slant 'normal
                       :foreground "#f1fa8c"
                       :background "#44475a"))
+
+(use-package doom-modeline
+  :ensure t
+  :defer 2
+  :commands (doom-modeline-mode)
+  :custom
+  (doom-modeline-buffer-file-name-style 'relative-to-project)
+  :init
+  (doom-modeline-mode t)
+  :config
+  (doom-modeline-remove-segment 'vcs))
 
 (use-package nerd-icons
   :ensure t)
