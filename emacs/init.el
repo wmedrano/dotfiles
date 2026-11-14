@@ -141,7 +141,6 @@
   :hook ((diff-mode . display-line-numbers-off)
          (jj-log-mode . display-line-numbers-off)
          (help-mode . display-line-numbers-off)
-         (gent-mode . display-line-numbers-off)
          (agent-shell-mode . display-line-numbers-off)
          (agent-shell-viewport-edit-mode . display-line-numbers-off)
          (dired-mode . display-line-numbers-off)
@@ -551,50 +550,5 @@ unindented namespace bodies."
   (:map agent-shell-mode-map
    ("<remap> <kill-ring-save>" . agent-shell-copy-as-markdown)
    ("C-c !" . agent-shell-insert-shell-command-output)))
-
-(use-package gent
-  :load-path "user-lisp/gent"
-  :commands (gent)
-  :functions (gent-make-openai-backend
-              gent-llm-make-dumile-backend gent-llm-make-opencode-go-backend
-              gent-tools-names)
-  :defines (gent-backends gent-llm-default-backend gent-tools-trusted)
-  :preface
-  (defun pi-api-key (provider)
-    "Return the API key for PROVIDER, a symbol, from the pi agent's auth file."
-    (with-temp-buffer
-      (insert-file-contents "~/.pi/agent/auth.json")
-      (alist-get 'key (alist-get provider (json-parse-buffer :object-type 'alist)))))
-  (defun set-gent-backend (name)
-    "Set `gent-llm-default-backend' to the backend NAME in `gent-backends'."
-    (interactive
-     (progn
-       (require 'gent)
-       (list (completing-read "Backend: " gent-backends nil t))))
-    (setq gent-llm-default-backend (alist-get name gent-backends nil nil #'equal))
-    (message "gent: using %s" name))
-  :config
-  (require 'gent-providers)
-  (setq gent-tools-trusted (gent-tools-names))
-  (setq gent-backends
-        `(("local/dory"
-           . ,(gent-make-openai-backend
-               :name "local"
-               :url-base "http://127.0.0.1:8080/v1"
-               :model "dory"
-               :max-tokens 2048
-               :temperature 1.0
-               :reasoning-effort nil))
-          ("dumile/qwen-flash-next"
-           . ,(gent-llm-make-dumile-backend
-               :api-key (lambda () (pi-api-key 'dumile))
-               :model "qwen-flash-next"
-               :reasoning-effort "high"))
-          ("opencodego/deepseek-v4.1-flash"
-           . ,(gent-llm-make-opencode-go-backend
-               :api-key (lambda () (pi-api-key 'opencode-go))
-               :model "deepseek-v4.1-flash"
-               :reasoning-effort "high"))))
-  (set-gent-backend "opencodego/deepseek-v4.1-flash"))
 
 ;;; init.el ends here
