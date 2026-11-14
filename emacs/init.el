@@ -12,10 +12,11 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window agent-shell auto-highlight-symbol company consult corfu diff-hl
-                doom-modeline dracula-theme eglot marginalia markdown-ts-mode
-                nerd-icons nerd-icons-completion orderless posframe rg rust-mode
-                ttx-mode vertico vundo))
+   '(ace-window agent-shell agent-shell-consult auto-highlight-symbol company
+                consult consult-agent-shell corfu diff-hl doom-modeline
+                dracula-theme eglot marginalia markdown-ts-mode nerd-icons
+                nerd-icons-completion orderless posframe rg rust-mode ttx-mode
+                vertico vundo))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -530,6 +531,7 @@ unindented namespace bodies."
      (inhibit-same-window . t)))
   (agent-shell-antigravity-acp-command '("agy" "acp"))
   (agent-shell-openai-codex-acp-command '("npx" "-y" "@agentclientprotocol/codex-acp"))
+  :defines (agent-shell-mode-map)
   :bind
   (:prefix-map agent-shell-prefix-map
    :prefix "C-c a"
@@ -537,7 +539,7 @@ unindented namespace bodies."
    ("t" . agent-shell-toggle)
    ("g" . agent-shell-antigravity-start-agent)
    ("n" . agent-shell-new-shell)
-   ("b" . agent-shell-switch-buffer)
+   ("b" . agent-shell-consult)
    ("r" . agent-shell-send-region)
    ("f" . agent-shell-send-file)
    ("d" . agent-shell-send-dwim)
@@ -550,5 +552,10 @@ unindented namespace bodies."
   (:map agent-shell-mode-map
    ("<remap> <kill-ring-save>" . agent-shell-copy-as-markdown)
    ("C-c !" . agent-shell-insert-shell-command-output)))
+
+(use-package agent-shell-consult
+  :ensure t
+  :defer t
+  :commands (agent-shell-consult))
 
 ;;; init.el ends here
