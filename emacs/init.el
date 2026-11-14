@@ -188,7 +188,17 @@
                  (display-buffer-in-side-window)
                  (side . bottom)
                  (slot . 1)
-                 (window-height . 0.2))))
+                 (window-height . 0.2)))
+  (add-to-list 'display-buffer-alist
+               '((derived-mode . agent-shell-mode)
+                 (display-buffer-reuse-window
+                  display-buffer-reuse-mode-window
+                  display-buffer-in-side-window)
+                 (side . right)
+                 (slot . 0)
+                 (window-width . 0.4)
+                 (dedicated . t)
+                 (window-parameters . ((no-delete-other-windows . t))))))
 
 (use-package posframe
   :ensure t
@@ -526,8 +536,13 @@ unindented namespace bodies."
   (agent-shell-display-action
    '((display-buffer-reuse-window
       display-buffer-reuse-mode-window
-      display-buffer-pop-up-window)
+      display-buffer-in-side-window)
      (mode . agent-shell-mode)
+     (side . right)
+     (slot . 0)
+     (window-width . 0.4)
+     (dedicated . t)
+     (window-parameters . ((no-delete-other-windows . t)))
      (inhibit-same-window . t)))
   (agent-shell-antigravity-acp-command '("agy" "acp"))
   (agent-shell-openai-codex-acp-command '("npx" "-y" "@agentclientprotocol/codex-acp"))
