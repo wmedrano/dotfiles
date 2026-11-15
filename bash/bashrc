@@ -25,6 +25,15 @@ if [[ -d "/home/wmedrano/src/chromium/src/third_party/depot_tools" ]]; then
 fi
 alias open='xdg-open'
 
+cd-tmp() {
+    local dir
+    dir="$(mktemp -d /tmp/tmp.XXXXXX)" && cd -- "$dir"
+}
+
+agy-tmp() {
+    (cd-tmp && agy "$@")
+}
+
 
 # Added by Antigravity CLI installer
 export PATH="/home/wmedrano/.local/bin:$PATH"
