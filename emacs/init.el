@@ -12,11 +12,11 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(ace-window agent-shell agent-shell-consult auto-highlight-symbol company
-                consult consult-agent-shell corfu diff-hl doom-modeline
-                dracula-theme eglot marginalia markdown-ts-mode nerd-icons
-                nerd-icons-completion orderless posframe rg rust-mode ttx-mode
-                vertico vundo))
+   '(ace-window agent-shell agent-shell-attention agent-shell-consult
+                auto-highlight-symbol company consult consult-agent-shell corfu
+                diff-hl doom-modeline dracula-theme eglot evil marginalia
+                markdown-ts-mode nerd-icons nerd-icons-completion orderless
+                posframe rg rust-mode ttx-mode vertico vundo))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -69,7 +69,7 @@
   (add-hook 'before-save-hook #'delete-trailing-whitespace)
   (set-face-attribute 'default nil :family "Iosevka Term Extended" :height 120))
 
-;; `C-c e' is a single entry point for code tooling, so it spans several
+;; `C-c e' is a shared prefix for code tooling, so it spans several
 ;; packages (flymake, xref, ...) rather than one.  Each tool also keeps its
 ;; own standard binding (`M-g d' for diagnostics, `M-.'/`M-?' for xref).
 ;; Eglot-only members live in `eglot-mode-map' (see `use-package eglot').
@@ -91,13 +91,60 @@
   :init
   (which-key-mode)
   :config
-  ;; Describe the code-tooling prefix (see `code-prefix-map').
-  (which-key-add-key-based-replacements "C-c e" "code")
-  (which-key-add-key-based-replacements "C-c a" "agent"))
+  (which-key-add-key-based-replacements
+    "C-c e" "code"
+    "C-c a" "agent"
+    "SPC a" "agent"
+    "SPC e" "code"
+    "SPC p" "project"
+    "SPC s" "search"))
 
 (use-package isearch
   :custom
   (isearch-allow-scroll t))
+
+;; `evil-1.15.0/evil.el' ships without a `lexical-binding' cookie.
+(let ((warning-inhibit-types '((files missing-lexbind-cookie))))
+  (use-package evil
+    :ensure t
+    :defines (evil-motion-state-map evil-normal-state-map
+              evil-visual-state-map evil-operator-state-map
+              evil-inner-text-objects-map)
+    :functions (evil-next-line evil-previous-line evil-forward-char
+                evil-forward-word-end evil-insert evil-mode
+                evil-set-initial-state)
+    :config
+    ;; Colemak: h n e i move left, down, up, and right.
+    (keymap-set evil-motion-state-map "j" (keymap-lookup evil-motion-state-map "n"))
+    (keymap-set evil-motion-state-map "n" #'evil-next-line)
+    (keymap-set evil-motion-state-map "e" #'evil-previous-line)
+    (keymap-set evil-motion-state-map "i" #'evil-forward-char)
+    (keymap-set evil-motion-state-map "k" #'evil-forward-word-end)
+    (let ((space-map (define-keymap
+                       "SPC" 'consult-buffer
+                       "j" 'jj
+                       "w" 'ace-window
+                       "s l" 'consult-line
+                       "s r" 'consult-ripgrep
+                       "s R" 'rg)))
+      ;; Look up each prefix in the current buffer to include mode-specific keys.
+      (dolist (binding '(("a" . "C-c a") ("e" . "C-c e") ("p" . "C-x p")))
+        (let ((source (kbd (cdr binding))))
+          (keymap-set space-map (car binding)
+                      (list 'menu-item "" nil :filter
+                            (lambda (_binding) (key-binding source))))))
+      (keymap-set evil-motion-state-map "SPC" space-map))
+    ;; Move insert and inner text objects off i so it can move in every state.
+    (keymap-unset evil-normal-state-map "i")
+    (keymap-set evil-normal-state-map "s" #'evil-insert)
+    (dolist (map (list evil-visual-state-map evil-operator-state-map))
+      (keymap-unset map "i")
+      (keymap-set map "l" evil-inner-text-objects-map))
+    ;; Use Emacs's F3 and F4 for keyboard macros.
+    (keymap-unset evil-normal-state-map "q")
+    (evil-set-initial-state 'jj-log-mode 'emacs)
+    (evil-set-initial-state 'jj-diff-mode 'emacs)
+    (evil-mode 1)))
 
 (use-package vundo
   :ensure t)
