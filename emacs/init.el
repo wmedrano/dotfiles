@@ -212,7 +212,6 @@
 ;;; ----------------------------------------------------------------------------
 
 (use-package window
-  :bind ("M-o" . other-window)
   :init
   (add-to-list 'display-buffer-alist
                '((derived-mode . (compilation-mode
@@ -263,7 +262,8 @@
         :weight ultra-bold
         :family "JetBrains Mono"
         :box (:line-width 3 :color "white")))))
-  :bind ("C-c w" . ace-window))
+  :bind (("M-o" . ace-window)
+         ("C-c w" . ace-window)))
 
 (use-package ace-window-posframe
   :after ace-window
