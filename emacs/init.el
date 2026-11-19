@@ -465,7 +465,8 @@
   (setq fill-column 100))
 
 (use-package gdscript-mode
-  :ensure t)
+  :ensure t
+  :hook ((gdscript-mode . eglot-ensure)))
 
 (use-package rust-ts-mode
   :mode "\\.rs\\'"
