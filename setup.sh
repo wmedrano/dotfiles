@@ -22,7 +22,6 @@ link() {
 
 link "$repo/emacs" "$HOME/.emacs.d"
 link "$repo/wezterm" "$HOME/.config/wezterm"
-link "$repo/ghostty" "$HOME/.config/ghostty"
 link "$repo/bash/bashrc" "$HOME/.bashrc"
 link "$repo/git/ignore" "$HOME/.config/git/ignore"
 
