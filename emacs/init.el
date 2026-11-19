@@ -1,6 +1,14 @@
 ;;; init.el --- Personal Emacs configuration -*- lexical-binding: t; -*-
 ;;; Commentary:
+;;
+;; Supported Emacs versions: 30 and 31 only.  Do not add compatibility
+;; code for older releases; version-specific branches should only
+;; distinguish between 30 and 31.
+;;
 ;;; Code:
+
+(when (< emacs-major-version 30)
+  (error "This configuration requires Emacs 30 or newer"))
 
 ;;; ----------------------------------------------------------------------------
 ;;; Early Startup & Performance
@@ -83,6 +91,12 @@
 (use-package autorevert
   :init
   (global-auto-revert-mode))
+
+(use-package recentf
+  :custom
+  (recentf-max-saved-items 200)
+  :init
+  (recentf-mode))
 
 (use-package which-key
   :defer 2
@@ -320,6 +334,7 @@
    ("C-x 4 b" . consult-buffer-other-window)
    ("C-x p b" . consult-project-buffer)
    ("C-x r b" . consult-bookmark)
+   ("C-x C-r" . consult-recent-file)
    ("M-y" . consult-yank-pop)
    ("M-g g" . consult-goto-line)
    ("M-g M-g" . consult-goto-line)

@@ -1,13 +1,15 @@
 local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
+config.front_end = 'WebGpu'
+
 -- Start with a maximized window.
 wezterm.on('gui-startup', function(cmd)
   local _, _, window = wezterm.mux.spawn_window(cmd or {})
   window:gui_window():maximize()
 end)
 
-config.font = wezterm.font 'Iosevka Term Extended'
+config.font = wezterm.font 'JetBrains Mono'
 config.font_size = 14
 config.color_scheme = 'Dracula (Official)'
 
