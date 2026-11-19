@@ -2,6 +2,7 @@ local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
 config.front_end = 'WebGpu'
+config.enable_wayland = false
 
 -- Start with a maximized window.
 wezterm.on('gui-startup', function(cmd)
