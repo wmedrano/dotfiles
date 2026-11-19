@@ -14,9 +14,10 @@
  '(package-selected-packages
    '(ace-window agent-shell agent-shell-attention agent-shell-consult
                 auto-highlight-symbol company consult consult-agent-shell corfu
-                diff-hl doom-modeline dracula-theme eglot evil marginalia
-                markdown-ts-mode nerd-icons nerd-icons-completion orderless
-                posframe rg rust-mode ttx-mode vertico vundo))
+                diff-hl doom-modeline dracula-theme eglot evil gdscript-mode
+                gdshader-mode marginalia markdown-ts-mode nerd-icons
+                nerd-icons-completion orderless posframe rg rust-mode ttx-mode
+                vertico vundo))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -447,6 +448,9 @@
   "Set `fill-column' to 100 in the current buffer."
   (interactive)
   (setq fill-column 100))
+
+(use-package gdscript-mode
+  :ensure t)
 
 (use-package rust-ts-mode
   :mode "\\.rs\\'"
