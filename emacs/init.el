@@ -70,6 +70,7 @@
   (scroll-conservatively 101)
   (scroll-margin 8)
   (indent-tabs-mode nil)
+  (tab-width 4)
   (fill-column 80)
   (ring-bell-function #'ignore)
   (read-process-output-max (* 1024 1024))
