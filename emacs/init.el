@@ -473,6 +473,12 @@
   :ensure t
   :hook ((gdscript-mode . eglot-ensure)))
 
+;; Godot's .godot and .import files use a ConfigFile/INI-like syntax (with
+;; `/` in keys and `null` values) that breaks strict `toml-ts-mode', so use
+;; `conf-toml-mode' just like `gdscript-mode' does for .tscn and .tres.
+(use-package conf-mode
+  :mode ("\\.\\(godot\\|import\\)\\'" . conf-toml-mode))
+
 (use-package rust-ts-mode
   :mode "\\.rs\\'"
   :hook ((rust-ts-mode . eglot-ensure)

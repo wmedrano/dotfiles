@@ -15,8 +15,6 @@ config.color_scheme = 'Dracula (Official)'
 
 -- Forces WezTerm to match standard wcwidth/runewidth cell calculations
 config.unicode_version = 16
-config.treat_east_asian_ambiguous_width_as_wide = false
-
 
 -- Make text like "cr/8604710" clickable as a Chromium Gerrit link.
 config.hyperlink_rules = wezterm.default_hyperlink_rules()
