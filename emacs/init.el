@@ -25,7 +25,7 @@
                 diff-hl doom-modeline dracula-theme eglot evil gdscript-mode
                 gdshader-mode marginalia markdown-ts-mode nerd-icons
                 nerd-icons-completion orderless posframe rg rust-mode ttx-mode
-                vertico vundo))
+                vertico vundo wgsl-mode))
  '(safe-local-variable-values
    '((compilation-scroll-output . first-error) (vc-handled-backends))))
 (custom-set-faces
@@ -530,6 +530,9 @@ unindented namespace bodies."
 (use-package markdown-ts-mode
   :ensure t
   :mode ("\\.md\\'" "\\.markdown\\'"))
+
+(use-package wgsl-mode
+  :ensure t)
 
 (use-package org
   :functions (org-link-preview-refresh)
