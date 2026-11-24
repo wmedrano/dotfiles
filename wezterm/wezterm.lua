@@ -2,7 +2,6 @@ local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
 config.front_end = 'WebGpu'
-config.enable_wayland = false
 
 -- Start with a maximized window.
 wezterm.on('gui-startup', function(cmd)
@@ -29,6 +28,11 @@ table.insert(config.hyperlink_rules, {
 -- Free ctrl+shift+space (default: QuickSelect) so it reaches terminal apps.
 config.keys = {
   { key = 'Space', mods = 'CTRL|SHIFT', action = wezterm.action.DisableDefaultAssignment },
+}
+
+-- Work around agy redraw glitches caused by its cursor-optimization escape sequences.
+config.set_environment_variables = {
+  AGY_CLI_DISABLE_ESCAPE_SEQUENCE_OPTIMIZATIONS = '1',
 }
 
 return config
