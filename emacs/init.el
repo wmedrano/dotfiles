@@ -136,6 +136,8 @@
     (keymap-set evil-motion-state-map "e" #'evil-previous-line)
     (keymap-set evil-motion-state-map "i" #'evil-forward-char)
     (keymap-set evil-motion-state-map "k" #'evil-forward-word-end)
+    (define-key evil-motion-state-map (kbd "gx") #'xref-find-references)
+    (define-key evil-normal-state-map (kbd "gx") #'xref-find-references)
     (let ((space-map (define-keymap
                        "SPC" 'consult-buffer
                        "j" 'jj
@@ -158,8 +160,11 @@
       (keymap-set map "l" evil-inner-text-objects-map))
     ;; Use Emacs's F3 and F4 for keyboard macros.
     (keymap-unset evil-normal-state-map "q")
+    (evil-set-initial-state 'compilation-mode 'emacs)
+    (evil-set-initial-state 'rg-mode 'emacs)
     (evil-set-initial-state 'jj-log-mode 'emacs)
-    (evil-set-initial-state 'jj-diff-mode 'emacs)
+    (evil-set-initial-state 'jj-diff-mode 'motion)
+    (evil-set-initial-state 'xref--xref-buffer-mode 'emacs)
     (evil-mode 1)))
 
 (use-package vundo
