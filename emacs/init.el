@@ -223,10 +223,9 @@
 
 (use-package auto-highlight-symbol
   :ensure t
-  :defer 3
-  :commands (global-auto-highlight-symbol-mode)
+  :commands (global-auto-highlight-symbol-mode auto-highlight-symbol-mode)
   :init
-  (global-auto-highlight-symbol-mode))
+  (add-hook 'prog-mode-hook #'auto-highlight-symbol-mode))
 
 ;;; ----------------------------------------------------------------------------
 ;;; Window Management & Navigation
