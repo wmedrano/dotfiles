@@ -10,7 +10,7 @@ wezterm.on('gui-startup', function(cmd)
   window:gui_window():maximize()
 end)
 
-config.font = wezterm.font 'JetBrains Mono'
+config.font = wezterm.font 'Iosevka Extended'
 config.font_size = 14
 config.color_scheme = 'Dracula (Official)'
 
