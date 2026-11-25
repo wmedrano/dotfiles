@@ -236,7 +236,8 @@
   (add-to-list 'display-buffer-alist
                '((derived-mode . (compilation-mode
                                   flymake-diagnostics-buffer-mode
-                                  flymake-project-diagnostics-mode))
+                                  flymake-project-diagnostics-mode
+                                  godot-mode))
                  (display-buffer-reuse-window
                   display-buffer-in-side-window)
                  (side . bottom)
