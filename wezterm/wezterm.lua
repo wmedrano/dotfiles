@@ -9,7 +9,9 @@ wezterm.on('gui-startup', function(cmd)
   window:gui_window():maximize()
 end)
 
-config.font = wezterm.font 'Iosevka Extended'
+-- Iosevka Term (not plain Iosevka) keeps every glyph exactly one cell wide;
+-- plain Iosevka draws some symbols (e.g. em-dash) double-width, which overlap.
+config.font = wezterm.font('Iosevka Term', { stretch = 'Expanded' })
 config.font_size = 14
 config.color_scheme = 'Dracula (Official)'
 
