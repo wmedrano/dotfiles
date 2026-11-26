@@ -160,6 +160,8 @@
       (keymap-set map "l" evil-inner-text-objects-map))
     ;; Use Emacs's F3 and F4 for keyboard macros.
     (keymap-unset evil-normal-state-map "q")
+    ;; Let underlying mode bindings for RET (e.g., follow link, diff-goto-source) work.
+    (keymap-unset evil-motion-state-map "RET")
     (evil-set-initial-state 'compilation-mode 'emacs)
     (evil-set-initial-state 'rg-mode 'emacs)
     (evil-set-initial-state 'jj-log-mode 'emacs)
