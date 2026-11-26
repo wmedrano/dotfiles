@@ -167,6 +167,7 @@
     (evil-set-initial-state 'jj-log-mode 'emacs)
     (evil-set-initial-state 'jj-diff-mode 'motion)
     (evil-set-initial-state 'xref--xref-buffer-mode 'emacs)
+    (evil-set-initial-state 'godot-mode 'emacs)
     (evil-mode 1)))
 
 (use-package vundo
@@ -474,7 +475,10 @@
 
 (use-package gdscript-mode
   :ensure t
-  :hook ((gdscript-mode . eglot-ensure)))
+  :hook ((gdscript-mode . eglot-ensure))
+  :bind (:map gdscript-mode-map
+              ("C-c C-e" . gdscript-godot-run-project-debug)
+              ("C-c C-h" . gdscript-docs-browse-symbol-at-point)))
 
 ;; Godot's .godot and .import files use a ConfigFile/INI-like syntax (with
 ;; `/` in keys and `null` values) that breaks strict `toml-ts-mode', so use
